@@ -1,0 +1,33 @@
+{
+    "name": "deployment-hub-server",
+    "version": "1.0.0",
+    "description": "Backend for Arihant Dream Infra Project Limited",
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+        "start": "node index.js",
+        "dev": "nodemon index.js"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "dependencies": {
+        "@aws-sdk/client-s3": "^3.993.0",
+        "@aws-sdk/s3-request-presigner": "^3.995.0",
+        "bcryptjs": "^2.4.3",
+        "cors": "^2.8.5",
+        "dotenv": "^16.6.1",
+        "express": "^4.19.2",
+        "jsonwebtoken": "^9.0.2",
+        "mongoose": "^8.3.2",
+        "multer": "^2.0.2",
+        "multer-s3": "^3.0.1",
+        "passport": "^0.7.0",
+        "passport-github2": "^0.1.12",
+        "passport-google-oauth20": "^2.0.0",
+        "sib-api-v3-sdk": "^8.5.0"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.0"
+    }
+}

@@ -1,0 +1,66 @@
+import express from 'express';
+import SiteLookup from '../models/SiteLookup.js';
+import authMiddleware from '../middleware/authMiddleware.js';
+
+const router = express.Router();
+const authenticate = authMiddleware;
+
+const adminOnly = (req, res, next) => {
+    if (req.user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required.' });
+    }
+    next();
+};
+
+// GET /api/site-lookups?type=siteName
+router.get('/', authenticate, async (req, res) => {
+    try {
+        const query = req.query.type ? { type: req.query.type } : {};
+        const items = await SiteLookup.find(query).sort({ value: 1 });
+        res.json(items);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// POST /api/site-lookups  (admin only)
+router.post('/', authenticate, adminOnly, async (req, res) => {
+    try {
+        const { type, value } = req.body;
+        if (!type || !value) return res.status(400).json({ message: 'type and value are required' });
+        const item = await SiteLookup.create({ type, value });
+        res.status(201).json(item);
+    } catch (err) {
+        if (err.code === 11000) return res.status(409).json({ message: 'This value already exists.' });
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// PUT /api/site-lookups/:id  (admin only)
+router.put('/:id', authenticate, adminOnly, async (req, res) => {
+    try {
+        const { value } = req.body;
+        const updated = await SiteLookup.findByIdAndUpdate(
+            req.params.id,
+            { value },
+            { new: true, runValidators: true }
+        );
+        if (!updated) return res.status(404).json({ message: 'Not found' });
+        res.json(updated);
+    } catch (err) {
+        if (err.code === 11000) return res.status(409).json({ message: 'This value already exists.' });
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// DELETE /api/site-lookups/:id  (admin only)
+router.delete('/:id', authenticate, adminOnly, async (req, res) => {
+    try {
+        await SiteLookup.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Deleted' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+export default router;
