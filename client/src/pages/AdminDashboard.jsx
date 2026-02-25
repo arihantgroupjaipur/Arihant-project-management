@@ -53,6 +53,7 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const isSiteEngineer = user?.role === 'engineer';
   const isTaskManager = user?.role === 'admin' || user?.role === 'project_manager';
   const canChangePurchaseOrderStatus = user?.role === 'admin' || user?.role === 'project_manager' || user?.role === 'purchase_manager';
   const panelTitle =
@@ -1351,6 +1352,7 @@ const AdminDashboard = () => {
                   searchQuery={purchaseOrderSearch}
                   filterStatus={purchaseOrderFilterStatus}
                   isAdmin={isAdmin}
+                  canEdit={isAdmin || isSiteEngineer}
                   onVerificationSuccess={() => {
                     queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
                   }}

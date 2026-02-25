@@ -48,6 +48,27 @@ router.get('/:id', authenticate, async (req, res) => {
     }
 });
 
+// Reset (Delete) only Material Verification data — PO itself is NOT deleted
+router.delete('/:id/verify', authenticate, async (req, res) => {
+    try {
+        const po = await PurchaseOrder.findById(req.params.id);
+        if (!po) return res.status(404).json({ message: 'Purchase Order not found' });
+
+        // Reset all verification fields
+        po.maalPraptiRasidUrl = null;
+        po.materialVerificationStatus = 'Pending';
+        po.items.forEach(item => {
+            item.receivedQuantity = 0;
+        });
+
+        await po.save();
+        const updatedPO = await PurchaseOrder.findById(po._id).populate('indentReference');
+        res.status(200).json(updatedPO);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // Update PO Material Verification
 router.put('/:id/verify', authenticate, async (req, res) => {
     try {

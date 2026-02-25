@@ -58,8 +58,16 @@ const App = () => (
                 <AdminDashboard />
               </AdminRoute>
             } />
-            <Route path="/work-order" element={<WorkOrder />} />
-            <Route path="/certification" element={<Certification />} />
+            <Route path="/work-order" element={
+              <ProtectedRoute>
+                <WorkOrder />
+              </ProtectedRoute>
+            } />
+            <Route path="/certification" element={
+              <ProtectedRoute>
+                <Certification />
+              </ProtectedRoute>
+            } />
             <Route path="/project-manager" element={
               <ProjectManagerRoute>
                 <AdminDashboard />

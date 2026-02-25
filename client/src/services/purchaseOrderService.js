@@ -60,6 +60,16 @@ export const updateMaterialVerification = async (id, payload) => {
     }
 };
 
+// Reset (clear) Material Verification data only — PO is NOT deleted
+export const resetMaterialVerification = async (id) => {
+    try {
+        const response = await api.delete(`/purchase-orders/${id}/verify`);
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || 'Failed to reset material verification');
+    }
+};
+
 export default {
     createPurchaseOrder,
     getPurchaseOrders,

@@ -9,7 +9,8 @@ import {
     Truck,
     Menu,
     X,
-    FileText
+    FileText,
+    PackageCheck
 } from "lucide-react";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
@@ -22,6 +23,8 @@ import WorkOrderForm from "@/components/WorkOrderForm";
 import WorkCompletionForm from "@/components/WorkCompletionForm";
 import IndentForm from "@/components/IndentForm";
 import { entryService } from "@/services/entryService";
+import { getPurchaseOrders } from "@/services/purchaseOrderService";
+import MaterialVerificationsList from "@/components/MaterialVerificationsList";
 import { useAuth } from "@/context/AuthContext";
 
 const EngineerDashboard = () => {
@@ -34,6 +37,9 @@ const EngineerDashboard = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const [entries, setEntries] = useState([]);
+    const [purchaseOrders, setPurchaseOrders] = useState([]);
+    const [poSearch, setPoSearch] = useState("");
+    const [poFilterStatus, setPoFilterStatus] = useState("all");
 
     const [formData, setFormData] = useState({
         date: "",
@@ -50,6 +56,7 @@ const EngineerDashboard = () => {
 
     useEffect(() => {
         loadEntries();
+        loadPurchaseOrders();
     }, []);
 
     const loadEntries = async () => {
@@ -59,6 +66,15 @@ const EngineerDashboard = () => {
         } catch (error) {
             console.error('Error loading entries:', error);
             toast.error('Failed to load entries');
+        }
+    };
+
+    const loadPurchaseOrders = async () => {
+        try {
+            const data = await getPurchaseOrders();
+            setPurchaseOrders(data);
+        } catch (error) {
+            console.error('Error loading purchase orders:', error);
         }
     };
 
@@ -167,6 +183,7 @@ const EngineerDashboard = () => {
         { id: "workOrder", label: "Work Order", icon: FileText },
         { id: "workCompletion", label: "Work Completion & Certification", icon: CheckCircle },
         { id: "indent", label: "Indent Form", icon: Truck },
+        { id: "materialVerification", label: "Material Verification", icon: PackageCheck },
         { id: "history", label: "View History", icon: HardHat },
     ];
 
@@ -292,6 +309,44 @@ const EngineerDashboard = () => {
                         {activeTab === "indent" && (
                             <div className="glass-card p-6 md:p-8">
                                 <IndentForm onSuccess={() => setActiveTab("history")} />
+                            </div>
+                        )}
+
+                        {activeTab === "materialVerification" && (
+                            <div className="space-y-6">
+                                <div>
+                                    <h3 className="text-xl font-bold text-foreground">Material Verification</h3>
+                                    <p className="text-muted-foreground text-sm mt-1">Enter received quantities and upload Maal Prapti Rasid</p>
+                                </div>
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/5 p-4 rounded-xl border border-white/10">
+                                    <div className="relative w-full sm:max-w-xs">
+                                        <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
+                                        <input
+                                            type="text"
+                                            placeholder="Search PO No, Vendor..."
+                                            value={poSearch}
+                                            onChange={(e) => setPoSearch(e.target.value)}
+                                            className="w-full pl-9 pr-4 py-2 text-sm bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
+                                        />
+                                    </div>
+                                    <select
+                                        value={poFilterStatus}
+                                        onChange={(e) => setPoFilterStatus(e.target.value)}
+                                        className="w-full sm:w-auto py-2 px-4 text-sm bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
+                                    >
+                                        <option value="all">All Status</option>
+                                        <option value="Pending">Pending</option>
+                                        <option value="Partial">Partial</option>
+                                        <option value="Verified">Verified</option>
+                                    </select>
+                                </div>
+                                <MaterialVerificationsList
+                                    purchaseOrders={purchaseOrders}
+                                    searchQuery={poSearch}
+                                    filterStatus={poFilterStatus}
+                                    canEdit={true}
+                                    onVerificationSuccess={loadPurchaseOrders}
+                                />
                             </div>
                         )}
 
