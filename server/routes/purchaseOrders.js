@@ -15,8 +15,8 @@ router.post('/', authenticate, async (req, res) => {
 
         const savedPO = await newPO.save();
 
-        // Populate indentReference before returning to get indentNumber
-        const populatedPO = await PurchaseOrder.findById(savedPO._id).populate('indentReference');
+        // Populate indentReferences before returning to get indentNumber
+        const populatedPO = await PurchaseOrder.findById(savedPO._id).populate('indentReferences');
         res.status(201).json(populatedPO);
     } catch (error) {
         console.error("Error creating PO:", error);
@@ -30,7 +30,7 @@ router.post('/', authenticate, async (req, res) => {
 // Get all POs
 router.get('/', authenticate, async (req, res) => {
     try {
-        const pos = await PurchaseOrder.find().populate('indentReference').sort({ createdAt: -1 });
+        const pos = await PurchaseOrder.find().populate('indentReferences').sort({ createdAt: -1 });
         res.status(200).json(pos);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -40,7 +40,7 @@ router.get('/', authenticate, async (req, res) => {
 // Get PO by ID
 router.get('/:id', authenticate, async (req, res) => {
     try {
-        const po = await PurchaseOrder.findById(req.params.id).populate('indentReference');
+        const po = await PurchaseOrder.findById(req.params.id).populate('indentReferences');
         if (!po) return res.status(404).json({ message: 'Purchase Order not found.' });
         res.status(200).json(po);
     } catch (error) {
@@ -57,34 +57,64 @@ router.delete('/:id/verify', authenticate, async (req, res) => {
         // Reset all verification fields
         po.maalPraptiRasidUrl = null;
         po.materialVerificationStatus = 'Pending';
+        po.receipts = [];
         po.items.forEach(item => {
             item.receivedQuantity = 0;
         });
 
         await po.save();
-        const updatedPO = await PurchaseOrder.findById(po._id).populate('indentReference');
+        const updatedPO = await PurchaseOrder.findById(po._id).populate('indentReferences');
         res.status(200).json(updatedPO);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-// Update PO Material Verification
+// Add a partial Delivery Receipt
 router.put('/:id/verify', authenticate, async (req, res) => {
     try {
-        const { items, maalPraptiRasidUrl } = req.body;
+        const { items, maalPraptiRasidUrl, receivedBy, challanNumber, remarks } = req.body;
         const po = await PurchaseOrder.findById(req.params.id);
         if (!po) return res.status(404).json({ message: 'Purchase Order not found' });
 
-        if (maalPraptiRasidUrl !== undefined) {
+        // Build the receipt object
+        if (items && Array.isArray(items) && items.some(i => Number(i.quantityReceived) > 0)) {
+            const receiptItems = items.map(reqItem => {
+                // We need the material description to store context in the receipt
+                const poItem = po.items.id(reqItem._id);
+                const desc = poItem ? poItem.materialDescription : "Unknown Item";
+                return {
+                    materialDescription: desc,
+                    quantityReceived: Number(reqItem.quantityReceived) || 0,
+                    qualityCheckRemarks: reqItem.qualityCheckRemarks || "",
+                    itemImageUrl: reqItem.itemImageUrl || null
+                };
+            }).filter(i => i.quantityReceived > 0); // Only store items actually received in this drop
+
+            if (receiptItems.length > 0) {
+                po.receipts.push({
+                    date: new Date(),
+                    receivedBy: receivedBy || req.user?.fullName || "Unknown",
+                    challanNumber: challanNumber || "",
+                    remarks: remarks || "",
+                    maalPraptiRasidUrl: maalPraptiRasidUrl || null,
+                    items: receiptItems
+                });
+            }
+        }
+
+        // Keep the global `maalPraptiRasidUrl` as the LATEST receipt URL for backward compatibility
+        // or just backward compat for existing logic if UI expects it at the top level.
+        if (maalPraptiRasidUrl !== undefined && po.receipts.length > 0) {
             po.maalPraptiRasidUrl = maalPraptiRasidUrl;
         }
 
+        // Update aggregate `receivedQuantity` on the PO items
         if (items && Array.isArray(items)) {
             items.forEach(reqItem => {
                 const poItem = po.items.id(reqItem._id);
                 if (poItem) {
-                    poItem.receivedQuantity = Number(reqItem.receivedQuantity) || 0;
+                    poItem.receivedQuantity += (Number(reqItem.quantityReceived) || 0);
                 }
             });
         }
@@ -106,7 +136,127 @@ router.put('/:id/verify', authenticate, async (req, res) => {
         }
 
         await po.save();
-        const updatedPO = await PurchaseOrder.findById(po._id).populate('indentReference');
+        const updatedPO = await PurchaseOrder.findById(po._id).populate('indentReferences');
+        res.status(200).json(updatedPO);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Update a specific Delivery Receipt
+router.put('/:id/receipts/:receiptId', authenticate, async (req, res) => {
+    try {
+        const { items, maalPraptiRasidUrl, challanNumber, remarks } = req.body;
+        const po = await PurchaseOrder.findById(req.params.id);
+        if (!po) return res.status(404).json({ message: 'Purchase Order not found' });
+
+        const receipt = po.receipts.id(req.params.receiptId);
+        if (!receipt) return res.status(404).json({ message: 'Receipt not found' });
+
+        // First, subtract the old receipt's quantities from the PO items
+        if (receipt.items && Array.isArray(receipt.items)) {
+            receipt.items.forEach(oldReceiptItem => {
+                const poItem = po.items.find(pi => pi.materialDescription === oldReceiptItem.materialDescription);
+                if (poItem) {
+                    poItem.receivedQuantity = Math.max(0, (poItem.receivedQuantity || 0) - (oldReceiptItem.quantityReceived || 0));
+                }
+            });
+        }
+
+        // Now update the receipt fields
+        if (challanNumber !== undefined) receipt.challanNumber = challanNumber;
+        if (remarks !== undefined) receipt.remarks = remarks;
+        if (maalPraptiRasidUrl !== undefined) receipt.maalPraptiRasidUrl = maalPraptiRasidUrl;
+
+        // Update receipt items and add the new quantities to PO items
+        if (items && Array.isArray(items)) {
+            // Rebuild receipt items
+            const newReceiptItems = items.map(reqItem => {
+                const desc = reqItem.materialDescription || "Unknown Item";
+                return {
+                    materialDescription: desc,
+                    quantityReceived: Number(reqItem.quantityReceived) || 0,
+                    qualityCheckRemarks: reqItem.qualityCheckRemarks || "",
+                    itemImageUrl: reqItem.itemImageUrl || null
+                };
+            }).filter(i => i.quantityReceived > 0);
+
+            receipt.items = newReceiptItems;
+
+            newReceiptItems.forEach(newReceiptItem => {
+                const poItem = po.items.find(pi => pi.materialDescription === newReceiptItem.materialDescription);
+                if (poItem) {
+                    poItem.receivedQuantity = (poItem.receivedQuantity || 0) + newReceiptItem.quantityReceived;
+                }
+            });
+        }
+
+        // Recalculate status
+        let totalOrdered = 0;
+        let totalReceived = 0;
+
+        po.items.forEach(item => {
+            totalOrdered += Number(item.quantity) || 0;
+            totalReceived += Number(item.receivedQuantity) || 0;
+        });
+
+        if (totalReceived === 0) {
+            po.materialVerificationStatus = 'Pending';
+        } else if (totalReceived >= totalOrdered) {
+            po.materialVerificationStatus = 'Verified';
+        } else {
+            po.materialVerificationStatus = 'Partial';
+        }
+
+        await po.save();
+        const updatedPO = await PurchaseOrder.findById(po._id).populate('indentReferences');
+        res.status(200).json(updatedPO);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Delete a specific Delivery Receipt
+router.delete('/:id/receipts/:receiptId', authenticate, async (req, res) => {
+    try {
+        const po = await PurchaseOrder.findById(req.params.id);
+        if (!po) return res.status(404).json({ message: 'Purchase Order not found' });
+
+        const receipt = po.receipts.id(req.params.receiptId);
+        if (!receipt) return res.status(404).json({ message: 'Receipt not found' });
+
+        // Subtract the receipt's quantities from the PO items
+        if (receipt.items && Array.isArray(receipt.items)) {
+            receipt.items.forEach(receiptItem => {
+                const poItem = po.items.find(pi => pi.materialDescription === receiptItem.materialDescription);
+                if (poItem) {
+                    poItem.receivedQuantity = Math.max(0, (poItem.receivedQuantity || 0) - (receiptItem.quantityReceived || 0));
+                }
+            });
+        }
+
+        // Remove the receipt
+        po.receipts.pull(req.params.receiptId);
+
+        // Recalculate status
+        let totalOrdered = 0;
+        let totalReceived = 0;
+
+        po.items.forEach(item => {
+            totalOrdered += Number(item.quantity) || 0;
+            totalReceived += Number(item.receivedQuantity) || 0;
+        });
+
+        if (totalReceived === 0) {
+            po.materialVerificationStatus = 'Pending';
+        } else if (totalReceived >= totalOrdered) {
+            po.materialVerificationStatus = 'Verified';
+        } else {
+            po.materialVerificationStatus = 'Partial';
+        }
+
+        await po.save();
+        const updatedPO = await PurchaseOrder.findById(po._id).populate('indentReferences');
         res.status(200).json(updatedPO);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -120,7 +270,7 @@ router.put('/:id', authenticate, async (req, res) => {
             req.params.id,
             { $set: req.body },
             { new: true, runValidators: true }
-        ).populate('indentReference');
+        ).populate('indentReferences');
 
         if (!updatedPO) return res.status(404).json({ message: 'Purchase Order not found' });
         res.status(200).json(updatedPO);
@@ -138,6 +288,22 @@ router.delete('/:id', authenticate, async (req, res) => {
         const deletedPO = await PurchaseOrder.findByIdAndDelete(req.params.id);
         if (!deletedPO) return res.status(404).json({ message: 'Purchase Order not found' });
         res.status(200).json({ message: 'Purchase Order deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Attach or remove an uploaded PDF on a PO
+router.patch('/:id/pdf', authenticate, async (req, res) => {
+    try {
+        const { uploadedPdf } = req.body;
+        const updatedPO = await PurchaseOrder.findByIdAndUpdate(
+            req.params.id,
+            { uploadedPdf: uploadedPdf ?? null },
+            { new: true }
+        ).populate('indentReferences');
+        if (!updatedPO) return res.status(404).json({ message: 'Purchase Order not found' });
+        res.status(200).json(updatedPO);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

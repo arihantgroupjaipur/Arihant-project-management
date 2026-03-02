@@ -43,11 +43,11 @@ const workCompletionSchema = new mongoose.Schema({
     },
     floorZoneUnit: {
         type: String,
-        required: true,
+        default: '',
     },
     workTrade: {
         type: String,
-        required: true,
+        default: '',
     },
     specificActivity: {
         type: String,
@@ -63,15 +63,15 @@ const workCompletionSchema = new mongoose.Schema({
     },
     engineerName: {
         type: String,
-        required: true,
+        default: '',
     },
     workStartDate: {
         type: Date,
-        required: true,
+        default: null,
     },
     workEndDate: {
         type: Date,
-        required: true,
+        default: null,
     },
     totalWorkDuration: {
         type: String,
@@ -153,6 +153,10 @@ const workCompletionSchema = new mongoose.Schema({
     },
     contractorSignature: {
         type: String, // base64 image
+        default: null,
+    },
+    uploadedPdf: {
+        type: String, // S3 key or URL for the scanned certification document
         default: null,
     },
     confirmationDate: {

@@ -5,9 +5,9 @@ import authMiddleware from '../middleware/authMiddleware.js';
 const router = express.Router();
 const authenticate = authMiddleware;
 
-const adminOnly = (req, res, next) => {
-    if (req.user?.role !== 'admin') {
-        return res.status(403).json({ message: 'Admin access required.' });
+const adminOrPurchaseManagerOnly = (req, res, next) => {
+    if (req.user?.role !== 'admin' && req.user?.role !== 'purchase_manager') {
+        return res.status(403).json({ message: 'Access denied: Requires Admin or Purchase Manager role.' });
     }
     next();
 };
@@ -23,12 +23,12 @@ router.get('/', authenticate, async (req, res) => {
     }
 });
 
-// POST /api/site-lookups  (admin only)
-router.post('/', authenticate, adminOnly, async (req, res) => {
+// POST /api/site-lookups
+router.post('/', authenticate, adminOrPurchaseManagerOnly, async (req, res) => {
     try {
-        const { type, value } = req.body;
+        const { type, value, vendorAddress, vendorGst, vendorContactNo } = req.body;
         if (!type || !value) return res.status(400).json({ message: 'type and value are required' });
-        const item = await SiteLookup.create({ type, value });
+        const item = await SiteLookup.create({ type, value, vendorAddress, vendorGst, vendorContactNo });
         res.status(201).json(item);
     } catch (err) {
         if (err.code === 11000) return res.status(409).json({ message: 'This value already exists.' });
@@ -36,13 +36,13 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
     }
 });
 
-// PUT /api/site-lookups/:id  (admin only)
-router.put('/:id', authenticate, adminOnly, async (req, res) => {
+// PUT /api/site-lookups/:id
+router.put('/:id', authenticate, adminOrPurchaseManagerOnly, async (req, res) => {
     try {
-        const { value } = req.body;
+        const { value, vendorAddress, vendorGst, vendorContactNo } = req.body;
         const updated = await SiteLookup.findByIdAndUpdate(
             req.params.id,
-            { value },
+            { value, vendorAddress, vendorGst, vendorContactNo },
             { new: true, runValidators: true }
         );
         if (!updated) return res.status(404).json({ message: 'Not found' });
@@ -53,8 +53,8 @@ router.put('/:id', authenticate, adminOnly, async (req, res) => {
     }
 });
 
-// DELETE /api/site-lookups/:id  (admin only)
-router.delete('/:id', authenticate, adminOnly, async (req, res) => {
+// DELETE /api/site-lookups/:id
+router.delete('/:id', authenticate, adminOrPurchaseManagerOnly, async (req, res) => {
     try {
         await SiteLookup.findByIdAndDelete(req.params.id);
         res.json({ message: 'Deleted' });

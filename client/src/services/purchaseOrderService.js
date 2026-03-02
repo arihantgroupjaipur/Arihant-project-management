@@ -70,11 +70,63 @@ export const resetMaterialVerification = async (id) => {
     }
 };
 
+// Update a specific Delivery Receipt
+export const updateDeliveryReceipt = async (poId, receiptId, payload) => {
+    try {
+        const response = await api.put(`/purchase-orders/${poId}/receipts/${receiptId}`, payload);
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || 'Failed to update delivery receipt');
+    }
+};
+
+// Delete a specific Delivery Receipt
+export const deleteDeliveryReceipt = async (poId, receiptId) => {
+    try {
+        const response = await api.delete(`/purchase-orders/${poId}/receipts/${receiptId}`);
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || 'Failed to delete delivery receipt');
+    }
+};
+
+// Upload a PDF and attach it to the purchase order
+export const uploadPurchaseOrderPdf = async (id, file) => {
+    try {
+        const formData = new FormData();
+        formData.append('image', file);
+        const uploadResponse = await api.post('/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const s3Key = uploadResponse.data.key;
+        const response = await api.patch(`/purchase-orders/${id}/pdf`, { uploadedPdf: s3Key });
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || 'Failed to upload PDF');
+    }
+};
+
+// Remove the uploaded PDF from a purchase order
+export const removePurchaseOrderPdf = async (id) => {
+    try {
+        const response = await api.patch(`/purchase-orders/${id}/pdf`, { uploadedPdf: null });
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || 'Failed to remove PDF');
+    }
+};
+
+
 export default {
     createPurchaseOrder,
     getPurchaseOrders,
     getPurchaseOrderById,
     updatePurchaseOrder,
     deletePurchaseOrder,
-    updateMaterialVerification
+    updateMaterialVerification,
+    resetMaterialVerification,
+    updateDeliveryReceipt,
+    deleteDeliveryReceipt,
+    uploadPurchaseOrderPdf,
+    removePurchaseOrderPdf
 };

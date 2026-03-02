@@ -71,6 +71,7 @@ router.post('/', authenticate, async (req, res) => {
         });
 
         const savedIndent = await newIndent.save();
+        // Fire notification (non-blocking)        
         res.status(201).json(savedIndent);
     } catch (error) {
         console.error("Error creating indent:", error);
@@ -89,7 +90,10 @@ router.get('/', authenticate, async (req, res) => {
             query.siteName = req.query.siteName;
         }
 
-        const indents = await Indent.find(query).sort({ createdAt: -1 });
+        const indents = await Indent.find(query)
+            .populate('createdBy', 'fullName email')
+            .populate('verifiedBy', 'fullName email')
+            .sort({ createdAt: -1 });
         res.status(200).json(indents);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -129,8 +133,10 @@ router.put('/:id/verify', authenticate, upload.single('verifiedPdf'), async (req
         const indentId = req.params.id;
         const { verifiedByPurchaseManager } = req.body;
 
+        const isVerified = verifiedByPurchaseManager === 'true' || verifiedByPurchaseManager === true;
         const updateData = {
-            verifiedByPurchaseManager: verifiedByPurchaseManager === 'true' || verifiedByPurchaseManager === true
+            verifiedByPurchaseManager: isVerified,
+            verifiedBy: isVerified ? req.user.id : null
         };
 
         if (req.file) {

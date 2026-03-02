@@ -1,6 +1,8 @@
 import express from 'express';
 import Task from '../models/Task.js';
+import User from '../models/User.js';
 import authMiddleware from '../middleware/authMiddleware.js';
+import { sendTaskAssignmentEmail } from '../utils/emailService.js';
 
 const router = express.Router();
 
@@ -10,17 +12,17 @@ router.use(authMiddleware);
 // Create a new task
 router.post('/', async (req, res) => {
     try {
-        const { workParticulars, contractor, plannedStartDate, plannedFinishDate, duration } = req.body;
+        const { workParticulars, contractor, contractorName, plannedStartDate, plannedFinishDate, duration } = req.body;
 
-        // Ensure user is a project manager (or admin)
         if (req.user.role !== 'project_manager' && req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Access denied. Project Manager role required.' });
         }
 
-        // Generate sequential Task ID: TK-000001, TK-000002, ...
-        const lastTask = await Task.findOne({ taskId: { $exists: true } })
-            .sort({ taskId: -1 });
+        if (!workParticulars || (!contractor && !contractorName)) {
+            return res.status(400).json({ message: 'Work particulars and contractor are required.' });
+        }
 
+        const lastTask = await Task.findOne({ taskId: { $exists: true } }).sort({ taskId: -1 });
         let nextNumber = 1;
         if (lastTask?.taskId) {
             const lastNumber = parseInt(lastTask.taskId.replace('TK-', ''), 10);
@@ -30,7 +32,8 @@ router.post('/', async (req, res) => {
 
         const newTask = new Task({
             workParticulars,
-            contractor,
+            ...(contractor ? { contractor } : {}),
+            contractorName: contractorName || '',
             plannedStartDate,
             plannedFinishDate,
             duration,
@@ -39,6 +42,35 @@ router.post('/', async (req, res) => {
         });
 
         const savedTask = await newTask.save();
+
+        // --- SEND ASSIGNMENT EMAILS ---
+        try {
+            // Get active engineers and purchase managers
+            const usersToNotify = await User.find({
+                role: { $in: ['engineer', 'purchase_manager'] },
+                status: 'active'
+            }).select('email');
+
+            let emails = usersToNotify.map(u => u.email);
+            const pmEmail = req.user.email;
+            if (pmEmail && !emails.includes(pmEmail)) {
+                emails.push(pmEmail);
+            }
+
+            if (emails.length > 0) {
+                const pmName = req.user.fullName || pmEmail || 'System';
+
+                // Fire and forget email dispatch
+                sendTaskAssignmentEmail(emails, {
+                    ...savedTask._doc,
+                    projectManagerName: pmName,
+                    contractorName: contractorName || 'Assignee TBA'
+                }).catch(err => console.error('Failed to send task email:', err));
+            }
+        } catch (emailErr) {
+            console.error('Error querying users for task assignment email:', emailErr);
+        }
+
         res.status(201).json(savedTask);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -55,12 +87,7 @@ router.get('/', async (req, res) => {
         // Requirement was "Project manager ... assign the tasks. and monitor".
         // It's likely they want to see what they assigned.
 
-        let query = {};
-        if (req.user.role === 'project_manager') {
-            query.projectManager = req.user.id;
-        }
-
-        const tasks = await Task.find(query)
+        const tasks = await Task.find({})
             .populate('contractor', 'name') // Assuming Contractor model has a 'name' field
             .populate('projectManager', 'fullName email')
             .sort({ createdAt: -1 });
@@ -83,12 +110,18 @@ router.put('/:id', async (req, res) => {
             return res.status(404).json({ message: 'Task not found' });
         }
 
-        // Allow PM to update only their tasks? Or any task?
-        // Requirement implies PM manages tasks.
-        // For strictness: if (req.user.role === 'project_manager' && task.projectManager.toString() !== req.user.id) ... 
-        // But for now, let's allow PM to update any task or stick to the list logic.
+        const { contractor, contractorName, ...otherUpdates } = req.body;
+        Object.assign(task, otherUpdates);
 
-        Object.assign(task, req.body);
+        // Handle contractor transition
+        if (contractor) {
+            task.contractor = contractor;
+            task.contractorName = contractorName || '';
+        } else {
+            task.contractor = undefined; // unset ref
+            task.contractorName = contractorName || '';
+        }
+
         const updatedTask = await task.save();
 
         // Populate for return
@@ -101,14 +134,24 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// Delete a task (admin only)
+// Delete a task (admin or project_manager)
 router.delete('/:id', async (req, res) => {
     try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ message: 'Access denied. Only admins can delete tasks.' });
+        if (req.user.role !== 'admin' && req.user.role !== 'project_manager') {
+            return res.status(403).json({ message: 'Access denied.' });
         }
 
-        await Task.findByIdAndDelete(req.params.id);
+        const task = await Task.findById(req.params.id);
+        if (!task) {
+            return res.status(404).json({ message: 'Task not found' });
+        }
+
+        // Project managers can only delete their own tasks
+        if (req.user.role === 'project_manager' && task.projectManager.toString() !== req.user.id) {
+            return res.status(403).json({ message: 'Access denied. You can only delete your own tasks.' });
+        }
+
+        await task.deleteOne();
         res.status(200).json({ message: 'Task deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: error.message });

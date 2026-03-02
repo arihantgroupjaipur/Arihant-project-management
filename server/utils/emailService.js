@@ -143,3 +143,59 @@ export const sendStatusChangeEmail = async (to, fullName, newStatus) => {
     const htmlContent = getEmailTemplate("Account Status Update", content, statusColor);
     return sendEmail(to, subject, htmlContent);
 };
+
+export const sendTaskAssignmentEmail = async (toEmails, taskDetails) => {
+    const subject = `New Task Assigned: ${taskDetails.taskId}`;
+
+    const content = `
+        <p>A new task has been assigned in the project management system.</p>
+        <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #e5e7eb;">
+            <h3 style="margin-top: 0; color: #111827; font-size: 16px;">Task Details</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280; width: 140px; font-weight: 600;">Task ID:</td>
+                    <td style="padding: 8px 0; color: #111827; font-weight: 600;">${taskDetails.taskId}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Work Particulars:</td>
+                    <td style="padding: 8px 0; color: #111827;">${taskDetails.workParticulars}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Contractor:</td>
+                    <td style="padding: 8px 0; color: #111827;">${taskDetails.contractorName || 'N/A'}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Start Date:</td>
+                    <td style="padding: 8px 0; color: #111827;">${new Date(taskDetails.plannedStartDate).toLocaleDateString()}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Finish Date:</td>
+                    <td style="padding: 8px 0; color: #111827;">${new Date(taskDetails.plannedFinishDate).toLocaleDateString()}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Assigned By (PM):</td>
+                    <td style="padding: 8px 0; color: #111827;">${taskDetails.projectManagerName}</td>
+                </tr>
+            </table>
+        </div>
+        <p>Please log in to the system to view full details and manage this task.</p>
+    `;
+
+    const htmlContent = getEmailTemplate(`New Task Assignment`, content, "#2563EB");
+
+    // The brevo API can take an array of recipients.
+    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+    sendSmtpEmail.subject = subject;
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.sender = { name: "Arihant Dream Infra Projects Limited", email: process.env.SENDER_EMAIL };
+    sendSmtpEmail.to = toEmails.map(email => ({ email }));
+
+    try {
+        const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
+        console.log('Task assignment email sent successfully:', data);
+        return data;
+    } catch (error) {
+        console.error('Error sending task email:', error);
+        throw error;
+    }
+};

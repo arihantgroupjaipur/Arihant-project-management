@@ -24,7 +24,7 @@ export const generatePurchaseOrderCSV = (purchaseOrders) => {
     let csvContent = headers.join(',') + '\n';
 
     purchaseOrders.forEach(po => {
-        const indentNum = po.indentReference?.indentNumber || po.indentReference || '';
+        const indentNum = po.indentReferences?.map(i => i?.indentNumber || i).join(', ') || '';
 
         const baseRow = [
             escapeCsvRef(po.poNumber),

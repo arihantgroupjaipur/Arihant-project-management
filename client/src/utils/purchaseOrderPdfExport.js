@@ -60,10 +60,20 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
         doc.setFontSize(14);
         doc.text('PURCHASE ORDER', pageWidth / 2, 35, { align: 'center' });
 
+        // Add Company Address on the left
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text('K-48,206, Class of Pearls', 15, 42);
+        doc.text('Income Tax Colony, Jaipur', 15, 46);
+        doc.text('Phone: 0141-2940606, 9785219777', 15, 50);
+        doc.text('E-mail: accounts@arihantgroupjaipur.com', 15, 54);
+        doc.text('CIN: U7010RJ2011PLC035322', 15, 58);
+        doc.text('GST: 08AANCR4854R1ZB', 15, 62);
+
         // Entry details
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        let yPos = 50;
+        let yPos = 72;
 
         const addField = (label, value, x) => {
             doc.setFont('helvetica', 'bold');
@@ -72,7 +82,7 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
             doc.text(value || 'N/A', x + doc.getTextWidth(label + ': ') + 2, yPos);
         };
 
-        const indentNum = po.indentReference?.indentNumber || po.indentReference || 'N/A';
+        const indentNum = po.indentReferences?.map(i => i?.indentNumber || i).join(', ') || 'N/A';
 
         // Row 1: Headers
         addField('PO No', po.poNumber, 15);
@@ -115,42 +125,47 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
         const tableData = [];
         if (po.items && po.items.length > 0) {
             po.items.forEach((item, index) => {
+                const baseAmount = Number(item.quantity || 0) * Number(item.rate || 0);
                 tableData.push([
                     index + 1,
                     item.materialDescription || '',
                     item.unit || '-',
                     item.quantity || 0,
                     Number(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                    baseAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
                     Number(item.taxAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
                     Number(item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })
                 ]);
             });
         } else {
-            tableData.push(['-', 'No items listed', '', '', '', '', '']);
+            tableData.push(['-', 'No items listed', '', '', '', '', '', '']);
         }
 
         autoTable(doc, {
             startY: yPos,
-            head: [['S.No', 'Description', 'Unit', 'QTY', 'Rate (Rs)', 'Tax (Rs)', 'Amount (Rs)']],
+            head: [['S.No', 'Description', 'Unit', 'QTY', 'Rate (Rs)', 'Total w/o Tax', 'Tax (Rs)', 'Amount (Rs)']],
             body: tableData,
             theme: 'grid',
             headStyles: {
                 fillColor: [240, 240, 240],
                 textColor: [0, 0, 0],
                 fontStyle: 'bold',
-                halign: 'center'
+                halign: 'center',
+                fontSize: 8
             },
             bodyStyles: {
-                textColor: [0, 0, 0]
+                textColor: [0, 0, 0],
+                fontSize: 8
             },
             columnStyles: {
-                0: { cellWidth: 12, halign: 'center' },
+                0: { cellWidth: 10, halign: 'center' },
                 1: { cellWidth: 'auto' },
-                2: { cellWidth: 15, halign: 'center' },
-                3: { cellWidth: 15, halign: 'center' },
-                4: { cellWidth: 22, halign: 'right' },
-                5: { cellWidth: 20, halign: 'right' },
-                6: { cellWidth: 30, halign: 'right' }
+                2: { cellWidth: 12, halign: 'center' },
+                3: { cellWidth: 12, halign: 'center' },
+                4: { cellWidth: 20, halign: 'right' },
+                5: { cellWidth: 22, halign: 'right' },
+                6: { cellWidth: 18, halign: 'right' },
+                7: { cellWidth: 24, halign: 'right' }
             },
             margin: { left: 15, right: 15 }
         });
@@ -211,12 +226,11 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
 
         const sigBoxes = [
             { label: 'Prepared By', name: po.preparedBy || '-' },
-            { label: 'Requisitioned By', name: po.requisitionedBy || '-' },
             { label: 'Verified By', name: po.verifiedBy || '-' },
             { label: 'Authorized By', name: po.authorizedBy || '-' }
         ];
 
-        const boxWidth = (pageWidth - 30 - 15) / 4; // 3 gaps of 5
+        const boxWidth = (pageWidth - 30 - 10) / 3; // 2 gaps of 5
         let currentX = 15;
 
         sigBoxes.forEach(box => {

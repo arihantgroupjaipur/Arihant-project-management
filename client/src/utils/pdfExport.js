@@ -88,32 +88,7 @@ export const generatePDF = async (entries) => {
 
         yPos += 5;
 
-        // ── LABOUR BREAKDOWN ────────────────────────────────────────
-        yPos = checkPageBreak(doc, yPos, 40);
-        yPos = drawHeading(doc, 'Labour Breakdown', yPos);
 
-        const labourData = (entry.labourDetails || []).map(d => [
-            d.contractorName || '—',
-            String(d.plannedLabour ?? 0),
-            String(d.actualLabour ?? 0),
-        ]);
-        if (labourData.length === 0) labourData.push(['No labour details', '—', '—']);
-
-        autoTable(doc, {
-            startY: yPos,
-            head: [['Contractor Name', 'Planned Labour', 'Actual Labour']],
-            body: labourData,
-            theme: 'grid',
-            headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', fontSize: 8 },
-            bodyStyles: { textColor: [0, 0, 0], fontSize: 8 },
-            columnStyles: {
-                0: { cellWidth: 100 },
-                1: { cellWidth: 38, halign: 'center' },
-                2: { cellWidth: 38, halign: 'center' },
-            },
-            margin: { left: 20, right: 20 },
-        });
-        yPos = (doc.lastAutoTable?.finalY || yPos) + 10;
 
         // ── DAILY PROGRESS REPORTS ──────────────────────────────────
         const progressRows = (entry.dailyProgressReports || []).filter(r => r.contractorName);
@@ -162,21 +137,19 @@ export const generatePDF = async (entries) => {
                 m.materialName || '—',
                 String(m.totalQuantity ?? 0),
                 m.unit || '—',
-                m.workOrderReference || '—',
             ]);
 
             autoTable(doc, {
                 startY: yPos,
-                head: [['Material Name', 'Quantity', 'Unit', 'Work Order Reference']],
+                head: [['Material Name', 'Quantity', 'Unit']],
                 body: matData,
                 theme: 'grid',
                 headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', fontSize: 8 },
                 bodyStyles: { textColor: [0, 0, 0], fontSize: 8 },
                 columnStyles: {
-                    0: { cellWidth: 70 },
-                    1: { cellWidth: 28, halign: 'center' },
-                    2: { cellWidth: 24, halign: 'center' },
-                    3: { cellWidth: 54 },
+                    0: { cellWidth: 110 },
+                    1: { cellWidth: 30, halign: 'center' },
+                    2: { cellWidth: 30, halign: 'center' },
                 },
                 margin: { left: 20, right: 20 },
             });

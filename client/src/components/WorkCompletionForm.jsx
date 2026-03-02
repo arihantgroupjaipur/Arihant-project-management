@@ -13,10 +13,13 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { uploadService } from "@/services/uploadService";
+import FileUploadSelector from "./FileUploadSelector";
+import { useLocation } from "react-router-dom";
 
-const WorkCompletionForm = ({ onSuccess, initialData }) => {
+const WorkCompletionForm = ({ onSuccess, initialData, sourceWorkOrder: sourceWorkOrderProp }) => {
     const contractorSigRef = useRef(null);
     const [workOrders, setWorkOrders] = useState([]);
+    const location = useLocation();
 
     useEffect(() => {
         const fetchWorkOrders = async () => {
@@ -64,34 +67,84 @@ const WorkCompletionForm = ({ onSuccess, initialData }) => {
         }
     }, [initialData]);
 
-    const [formData, setFormData] = useState({
-        date: new Date().toISOString().split('T')[0],
-        workOrderNumber: "",
-        blockTower: "",
-        floorZoneUnit: "",
-        workTrade: "",
-        specificActivity: "",
-        contractorName: "",
-        billNo: "",
-        engineerName: "",
-        workStartDate: "",
-        workEndDate: "",
-        totalWorkDuration: "",
-        qcRemarks: "",
-        iAgree: false,
-        confirmationDate: new Date().toISOString().split('T')[0],
+    const [formData, setFormData] = useState(() => {
+        // Prefer prop over location.state
+        const wo = sourceWorkOrderProp || location.state?.sourceWorkOrder;
+        if (wo && !initialData) {
+            const firstItem = wo.workItems?.[0];
+            let duration = "";
+            if (firstItem && firstItem.workStartDate && firstItem.workFinishDate) {
+                const start = new Date(firstItem.workStartDate);
+                const end = new Date(firstItem.workFinishDate);
+                const diffTime = Math.abs(end - start);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                duration = `${diffDays} days`;
+            }
+            return {
+                date: new Date().toISOString().split('T')[0],
+                workOrderNumber: wo.workOrderNumber || "",
+                blockTower: wo.addressLocation || wo.workLocationName || "",
+                floorZoneUnit: "",
+                workTrade: "",
+                specificActivity: firstItem?.workDescription || "",
+                contractorName: wo.contactPersonName || "",
+                billNo: "",
+                engineerName: wo.storeKeeperSupervisorName || "",
+                workStartDate: firstItem?.workStartDate ? new Date(firstItem.workStartDate).toISOString().split('T')[0] : "",
+                workEndDate: firstItem?.workFinishDate ? new Date(firstItem.workFinishDate).toISOString().split('T')[0] : "",
+                totalWorkDuration: duration,
+                qcRemarks: "",
+                iAgree: false,
+                confirmationDate: new Date().toISOString().split('T')[0],
+            };
+        }
+        return {
+            date: new Date().toISOString().split('T')[0],
+            workOrderNumber: "",
+            blockTower: "",
+            floorZoneUnit: "",
+            workTrade: "",
+            specificActivity: "",
+            contractorName: "",
+            billNo: "",
+            engineerName: "",
+            workStartDate: "",
+            workEndDate: "",
+            totalWorkDuration: "",
+            qcRemarks: "",
+            iAgree: false,
+            confirmationDate: new Date().toISOString().split('T')[0],
+        };
     });
 
-    const [workExecutionRows, setWorkExecutionRows] = useState([
-        {
-            summary: "",
-            startDate: "",
-            endDate: "",
-            timeDelay: "",
-            actual: "",
-            completionPercent: "",
-        },
-    ]);
+    const [workExecutionRows, setWorkExecutionRows] = useState(() => {
+        // Prefer prop over location.state
+        const wo = sourceWorkOrderProp || location.state?.sourceWorkOrder;
+        if (wo && !initialData) {
+            if (wo.workItems && wo.workItems.length > 0) {
+                return wo.workItems.map(item => ({
+                    summary: item.workDescription || "",
+                    startDate: item.workStartDate ? new Date(item.workStartDate).toISOString().split('T')[0] : "",
+                    endDate: item.workFinishDate ? new Date(item.workFinishDate).toISOString().split('T')[0] : "",
+                    timeDelay: "",
+                    actual: "",
+                    completionPercent: "",
+                }));
+            }
+        }
+        return [
+            {
+                summary: "",
+                startDate: "",
+                endDate: "",
+                timeDelay: "",
+                actual: "",
+                completionPercent: "",
+            },
+        ];
+    });
+
+    // Initial layout logic handles prefill correctly. We do not need a useEffect.
 
     const [preWorkChecklist, setPreWorkChecklist] = useState({
         materialsChecked: false,
@@ -178,7 +231,7 @@ const WorkCompletionForm = ({ onSuccess, initialData }) => {
             setFormData(prev => ({
                 ...prev,
                 workOrderNumber: selectedWO.workOrderNumber,
-                blockTower: selectedWO.workLocationName || "",
+                blockTower: selectedWO.addressLocation || selectedWO.workLocationName || "", // Maps accurately
                 floorZoneUnit: "", // Not explicitly in WO, leave empty or infer if possible
                 workTrade: workItem.workDescription || "",
                 specificActivity: workItem.workDescription || "",
@@ -188,6 +241,20 @@ const WorkCompletionForm = ({ onSuccess, initialData }) => {
                 workEndDate: workItem.workFinishDate ? new Date(workItem.workFinishDate).toISOString().split('T')[0] : "",
                 totalWorkDuration: duration,
             }));
+
+            // Sync work items to execution rows
+            if (selectedWO.workItems && selectedWO.workItems.length > 0) {
+                const rows = selectedWO.workItems.map(item => ({
+                    summary: item.workDescription || "",
+                    startDate: item.workStartDate ? new Date(item.workStartDate).toISOString().split('T')[0] : "",
+                    endDate: item.workFinishDate ? new Date(item.workFinishDate).toISOString().split('T')[0] : "",
+                    timeDelay: "",
+                    actual: "",
+                    completionPercent: "",
+                }));
+                setWorkExecutionRows(rows);
+            }
+
         } else {
             setFormData(prev => ({ ...prev, workOrderNumber: workOrderNumber }));
         }
@@ -236,12 +303,6 @@ const WorkCompletionForm = ({ onSuccess, initialData }) => {
         );
         if (!hasValidRow) {
             toast.error("At least one work execution summary is required");
-            return;
-        }
-
-        // Validate contractor signature
-        if (contractorSigRef.current?.isEmpty()) {
-            toast.error("Contractor signature is required");
             return;
         }
 
@@ -636,16 +697,16 @@ const WorkCompletionForm = ({ onSuccess, initialData }) => {
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-2">
-                                                <label className="cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-md border border-white/10 transition-colors">
-                                                    <Upload className="w-3 h-3 text-muted-foreground" />
-                                                    <span className="text-xs text-muted-foreground">Upload Image / File</span>
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-                                                        className="hidden"
-                                                        onChange={(e) => handleImageUpload("preWorkChecklist", key, e.target.files[0])}
-                                                    />
-                                                </label>
+                                                <FileUploadSelector
+                                                    accept="image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx"
+                                                    onFileSelect={(file) => handleImageUpload("preWorkChecklist", key, file)}
+                                                    title="Upload Proof"
+                                                >
+                                                    <button type="button" className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-md border border-white/10 transition-colors">
+                                                        <Upload className="w-3 h-3 text-muted-foreground" />
+                                                        <span className="text-xs text-muted-foreground">Upload Image / File</span>
+                                                    </button>
+                                                </FileUploadSelector>
                                             </div>
                                         )}
                                     </div>
@@ -692,16 +753,16 @@ const WorkCompletionForm = ({ onSuccess, initialData }) => {
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-2">
-                                                <label className="cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-md border border-white/10 transition-colors">
-                                                    <Upload className="w-3 h-3 text-muted-foreground" />
-                                                    <span className="text-xs text-muted-foreground">Upload Image / File</span>
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-                                                        className="hidden"
-                                                        onChange={(e) => handleImageUpload("duringWorkChecklist", key, e.target.files[0])}
-                                                    />
-                                                </label>
+                                                <FileUploadSelector
+                                                    accept="image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx"
+                                                    onFileSelect={(file) => handleImageUpload("duringWorkChecklist", key, file)}
+                                                    title="Upload Proof"
+                                                >
+                                                    <button type="button" className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-md border border-white/10 transition-colors">
+                                                        <Upload className="w-3 h-3 text-muted-foreground" />
+                                                        <span className="text-xs text-muted-foreground">Upload Image / File</span>
+                                                    </button>
+                                                </FileUploadSelector>
                                             </div>
                                         )}
                                     </div>
@@ -749,16 +810,16 @@ const WorkCompletionForm = ({ onSuccess, initialData }) => {
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-2">
-                                                <label className="cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-md border border-white/10 transition-colors">
-                                                    <Upload className="w-3 h-3 text-muted-foreground" />
-                                                    <span className="text-xs text-muted-foreground">Upload Image / File</span>
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-                                                        className="hidden"
-                                                        onChange={(e) => handleImageUpload("postWorkChecklist", key, e.target.files[0])}
-                                                    />
-                                                </label>
+                                                <FileUploadSelector
+                                                    accept="image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx"
+                                                    onFileSelect={(file) => handleImageUpload("postWorkChecklist", key, file)}
+                                                    title="Upload Proof"
+                                                >
+                                                    <button type="button" className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-md border border-white/10 transition-colors">
+                                                        <Upload className="w-3 h-3 text-muted-foreground" />
+                                                        <span className="text-xs text-muted-foreground">Upload Image / File</span>
+                                                    </button>
+                                                </FileUploadSelector>
                                             </div>
                                         )}
                                     </div>

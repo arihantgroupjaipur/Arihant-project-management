@@ -4,13 +4,16 @@ const siteLookupSchema = new mongoose.Schema({
     type: {
         type: String,
         required: true,
-        enum: ['siteName', 'siteEngineer', 'materialGroup'],
+        enum: ['siteName', 'siteEngineer', 'materialGroup', 'vendor'],
     },
     value: {
         type: String,
         required: true,
         trim: true,
     },
+    vendorAddress: { type: String, trim: true },
+    vendorGst: { type: String, trim: true },
+    vendorContactNo: { type: String, trim: true },
 }, { timestamps: true });
 
 // Unique per type+value pair

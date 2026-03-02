@@ -12,11 +12,11 @@ const purchaseOrderSchema = new mongoose.Schema({
         required: true,
         default: Date.now
     },
-    indentReference: {
+    indentReferences: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Indent',
         required: true
-    },
+    }],
     taskReference: {
         type: String,
         required: true,
@@ -52,7 +52,22 @@ const purchaseOrderSchema = new mongoose.Schema({
         baseAmount: { type: Number, required: true, default: 0 },
         taxAmount: { type: Number, default: 0 }, // URD / Taxes
         amount: { type: Number, required: true }, // Final Total for Item
-        receivedQuantity: { type: Number, default: 0 } // Track how many items are received
+        receivedQuantity: { type: Number, default: 0 } // Aggregate sum of all receipts
+    }],
+
+    // Delivery Receipts (Multiple partial material drops)
+    receipts: [{
+        date: { type: Date, default: Date.now },
+        receivedBy: { type: String, trim: true },
+        challanNumber: { type: String, trim: true },
+        remarks: { type: String, trim: true },
+        maalPraptiRasidUrl: { type: String }, // Individual challan photo
+        items: [{
+            materialDescription: { type: String, required: true }, // To match against PO items
+            quantityReceived: { type: Number, required: true, default: 0 },
+            qualityCheckRemarks: { type: String, trim: true },
+            itemImageUrl: { type: String }
+        }]
     }],
 
     // Summary & Totals
@@ -84,6 +99,7 @@ const purchaseOrderSchema = new mongoose.Schema({
         default: 'none'
     },
     maalPraptiRasidUrl: { type: String },
+    uploadedPdf: { type: String, default: null },
 
     status: {
         type: String,

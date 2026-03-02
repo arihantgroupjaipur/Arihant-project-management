@@ -9,7 +9,12 @@ const taskSchema = new mongoose.Schema({
     contractor: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Contractor',
-        required: true
+        required: false,
+    },
+    contractorName: {
+        type: String,
+        trim: true,
+        default: '',
     },
     plannedStartDate: {
         type: Date,

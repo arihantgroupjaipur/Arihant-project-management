@@ -97,7 +97,7 @@ export const generateMaterialVerificationPdf = async (pos, showLogo = true) => {
                     ],
                     [
                         '', '',
-                        'Indent Ref:', po.indentReference?.indentNumber || 'N/A'
+                        'Indent Ref:', po.indentReferences?.map(i => i?.indentNumber).join(', ') || 'N/A'
                     ]
                 ],
                 didDrawPage: function (data) {
@@ -121,7 +121,7 @@ export const generateMaterialVerificationPdf = async (pos, showLogo = true) => {
 
             autoTable(doc, {
                 startY: yPos,
-                head: [['S.No', 'Material Description', 'Unit', 'Ordered Qty', 'Received Qty']],
+                head: [['S.No', 'Material Description', 'Unit', 'Ordered Qty', 'Total Received']],
                 body: tableRows,
                 theme: 'grid',
                 headStyles: {
@@ -143,6 +143,51 @@ export const generateMaterialVerificationPdf = async (pos, showLogo = true) => {
                     yPos = data.cursor.y + 10;
                 }
             });
+
+            // Past Delivery Receipts Table
+            if (po.receipts && po.receipts.length > 0) {
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+                doc.text("Delivery Receipts History", 14, yPos);
+                yPos += 5;
+
+                const receiptsRows = [];
+                po.receipts.forEach((receipt, rIdx) => {
+                    const rDate = receipt.date ? format(new Date(receipt.date), 'dd/MM/yyyy') : 'N/A';
+                    receiptsRows.push([
+                        { content: `Delivery #${rIdx + 1} - Date: ${rDate} | Received By: ${receipt.receivedBy || 'N/A'}`, colSpan: 3, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }
+                    ]);
+                    receipt.items?.forEach(item => {
+                        receiptsRows.push([
+                            item.materialDescription || 'N/A',
+                            '',
+                            item.quantityReceived || 0
+                        ]);
+                    });
+                });
+
+                autoTable(doc, {
+                    startY: yPos,
+                    head: [['Description', '', 'Quantity']],
+                    body: receiptsRows,
+                    theme: 'grid',
+                    headStyles: {
+                        fillColor: [100, 100, 100],
+                        textColor: 255,
+                        fontSize: 8,
+                        fontStyle: 'bold'
+                    },
+                    styles: { fontSize: 8, cellPadding: 3 },
+                    columnStyles: {
+                        0: { halign: 'left', cellWidth: 'auto' },
+                        1: { cellWidth: 20 },
+                        2: { halign: 'right', cellWidth: 30 }
+                    },
+                    didDrawPage: function (data) {
+                        yPos = data.cursor.y + 10;
+                    }
+                });
+            }
 
             // Signatures Section (moved to bottom)
             const pageHeight = doc.internal.pageSize.height;

@@ -13,7 +13,9 @@ import {
 
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-const fmt = (d) => d ? new Date(d).toLocaleDateString("en-IN") : "—";
+import { format } from "date-fns";
+
+const fmt = (d) => d ? format(new Date(d), 'dd/MM/yyyy') : "—";
 
 const StatusChip = ({ status }) => {
     const map = {

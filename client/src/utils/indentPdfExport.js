@@ -60,10 +60,20 @@ export const generateIndentPDF = async (indents) => {
         doc.setFontSize(14);
         doc.text('MATERIAL INDENT / SITE REQUIREMENT', pageWidth / 2, 35, { align: 'center' });
 
-        // Entry details
-        doc.setFontSize(11);
+        // Add Company Address on the left
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        let yPos = 50;
+        doc.text('K-48,206, Class of Pearls', 15, 42);
+        doc.text('Income Tax Colony, Jaipur', 15, 46);
+        doc.text('Phone: 0141-2940606, 9785219777', 15, 50);
+        doc.text('E-mail: accounts@arihantgroupjaipur.com', 15, 54);
+        doc.text('CIN: U7010RJ2011PLC035322', 15, 58);
+        doc.text('GST: 08AANCR4854R1ZB', 15, 62);
+
+        // Entry details
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        let yPos = 72;
 
         const addField = (label, value, x) => {
             doc.setFont('helvetica', 'bold');

@@ -8,7 +8,7 @@ export const generatePurchaseOrderExcel = (purchaseOrders) => {
     const exportData = [];
 
     purchaseOrders.forEach(po => {
-        const indentNum = po.indentReference?.indentNumber || po.indentReference || '';
+        const indentNum = po.indentReferences?.map(i => i?.indentNumber || i).join(', ') || '';
 
         if (po.items && po.items.length > 0) {
             po.items.forEach(item => {

@@ -82,6 +82,10 @@ const workOrderSchema = new mongoose.Schema({
             default: null,
         },
     },
+    uploadedPdf: {
+        type: String, // S3 key
+        default: null,
+    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',

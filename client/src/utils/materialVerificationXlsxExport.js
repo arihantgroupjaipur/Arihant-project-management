@@ -15,7 +15,7 @@ export const exportMaterialVerificationXlsx = (pos) => {
         rows.push(['Vendor Name', po.vendorName || 'N/A', 'Contact', po.vendorContactNo || 'N/A']);
         rows.push(['Address', po.vendorAddress || 'N/A', 'GST', po.vendorGst || 'N/A']);
         rows.push(['Task Ref', po.taskReference || 'N/A', 'Status', po.materialVerificationStatus || 'Pending']);
-        rows.push(['Indent Ref', po.indentReference?.indentNumber || 'N/A']);
+        rows.push(['Indent Ref', po.indentReferences?.map(i => i?.indentNumber).join(', ') || 'N/A']);
         rows.push([]);
 
         // Items table header
@@ -31,6 +31,25 @@ export const exportMaterialVerificationXlsx = (pos) => {
                 item.receivedQuantity || 0,
             ]);
         });
+
+        // Receipts
+        if (po.receipts && po.receipts.length > 0) {
+            rows.push([]);
+            rows.push(['Delivery Receipts History']);
+            rows.push(['Delivery #', 'Date', 'Received By', 'Description', 'Qty Received']);
+            po.receipts.forEach((receipt, rIdx) => {
+                const rDate = receipt.date ? format(new Date(receipt.date), 'dd/MM/yyyy') : 'N/A';
+                (receipt.items || []).forEach((rItem, iIdx) => {
+                    rows.push([
+                        iIdx === 0 ? rIdx + 1 : '',
+                        iIdx === 0 ? rDate : '',
+                        iIdx === 0 ? (receipt.receivedBy || '') : '',
+                        rItem.materialDescription || '',
+                        rItem.quantityReceived || 0
+                    ]);
+                });
+            });
+        }
 
         const sheetName = (po.poNumber || `PO-${pos.indexOf(po) + 1}`).slice(0, 31);
         const ws = XLSX.utils.aoa_to_sheet(rows);

@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Save } from "lucide-react";
+import { Plus, Trash2, Save, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 import { getIndents } from "@/services/indentService";
 import { createPurchaseOrder, updatePurchaseOrder } from "@/services/purchaseOrderService";
+import siteLookupService from "@/services/siteLookupService";
 import {
     Select,
     SelectContent,
@@ -11,19 +13,33 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuCheckboxItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { uploadService } from "@/services/uploadService";
 import { FileUp, Link as LinkIcon } from "lucide-react";
+import FileUploadSelector from "./FileUploadSelector";
 
 const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [indents, setIndents] = useState([]);
     const [selectedIndentObj, setSelectedIndentObj] = useState(null);
 
+    // Fetch Vendors
+    const { data: vendors = [] } = useQuery({
+        queryKey: ['vendorsLookup'],
+        queryFn: () => siteLookupService.getSiteLookups('vendor'),
+    });
+
     const [formData, setFormData] = useState({
         poNumber: "",
         date: new Date().toISOString().split('T')[0],
-        indentReference: "",
+        indentReferences: [],
         taskReference: "",
 
         // Vendor Info
@@ -39,13 +55,12 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
         shipToContactNo: "",
 
         // Summary Info
-        freight: 0,
+        freight: "",
         comments: "",
         termsAndConditions: "Billing must be in Name of \"RQUBE BUILDCON PRIVATE LIMITED\"\nMaterial Should Reach On Site Before 5:45 PM\nMaterial Delivery Date : Next day of payment.\nProperly Signed challan and MRN's Should be attached with bill at the time of submission.\nMaterial Found defective to be replaced at no additional cost to the purchaser.",
 
         // Authorizations
         preparedBy: "",
-        requisitionedBy: "",
         verifiedBy: "",
         authorizedBy: "",
 
@@ -59,7 +74,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
     });
 
     const [items, setItems] = useState([
-        { materialDescription: "", unit: "", quantity: "", rate: "", baseAmount: 0, taxAmount: 0, amount: 0 }
+        { materialDescription: "", unit: "", quantity: "", rate: "", baseAmount: 0, taxRate: "18", taxAmount: 0, amount: 0 }
     ]);
 
     const [quotationFiles, setQuotationFiles] = useState({
@@ -81,10 +96,15 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
 
     useEffect(() => {
         if (initialData) {
+            // Convert initialData indentReferences strings or objects to an array of IDs
+            const initialIndentRefs = Array.isArray(initialData.indentReferences)
+                ? initialData.indentReferences.map(i => i?._id || i)
+                : (initialData.indentReference ? [initialData.indentReference._id || initialData.indentReference] : []);
+
             setFormData({
                 poNumber: initialData.poNumber || "",
                 date: initialData.date ? new Date(initialData.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-                indentReference: initialData.indentReference?._id || initialData.indentReference || "",
+                indentReferences: initialIndentRefs,
                 taskReference: initialData.taskReference || "",
 
                 vendorName: initialData.vendorName || "",
@@ -97,12 +117,11 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                 shipToContactPerson: initialData.shipToContactPerson || "",
                 shipToContactNo: initialData.shipToContactNo || "",
 
-                freight: initialData.freight || 0,
+                freight: initialData.freight ?? "",
                 comments: initialData.comments || "",
-                termsAndConditions: initialData.termsAndConditions || "",
+                termsAndConditions: initialData.termsAndConditions || "Billing must be in Name of \"RQUBE BUILDCON PRIVATE LIMITED\"\nMaterial Should Reach On Site Before 5:45 PM\nMaterial Delivery Date : Next day of payment.\nProperly Signed challan and MRN's Should be attached with bill at the time of submission.\nMaterial Found defective to be replaced at no additional cost to the purchaser.",
 
                 preparedBy: initialData.preparedBy || "",
-                requisitionedBy: initialData.requisitionedBy || "",
                 verifiedBy: initialData.verifiedBy || "",
                 authorizedBy: initialData.authorizedBy || "",
 
@@ -119,33 +138,74 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
         }
     }, [initialData]);
 
-    // Handle Indent Selection Change
-    const handleIndentChange = (indentId) => {
-        const selected = indents.find(i => i._id === indentId);
-        if (selected) {
-            setSelectedIndentObj(selected);
-            setFormData(prev => ({
-                ...prev,
-                indentReference: selected._id,
-                taskReference: selected.taskReference || "",
-                shipToAddress: selected.siteName || "",
-                shipToContactPerson: selected.siteEngineerName || ""
-            }));
+    // Handle Multiple Indent Selection
+    const handleIndentToggle = (indentId) => {
+        setFormData(prev => {
+            const currentRefs = prev.indentReferences || [];
+            const isSelected = currentRefs.includes(indentId);
 
-            // Optionally auto-populate items from indent if it's a new PO
-            if (!initialData && selected.items && selected.items.length > 0) {
-                const prefilledItems = selected.items.map(item => ({
-                    materialDescription: item.materialDescription || "",
-                    unit: item.unit || "",
-                    quantity: item.requiredQuantity ? Number(item.requiredQuantity) : 0,
-                    rate: "",
-                    baseAmount: 0,
-                    taxAmount: 0,
-                    amount: 0
-                }));
-                setItems(prefilledItems);
+            let newRefs;
+            if (isSelected) {
+                newRefs = currentRefs.filter(id => id !== indentId);
+            } else {
+                newRefs = [...currentRefs, indentId];
             }
-        }
+
+            // Sync items and common data from the selected indents
+            const selectedIndents = indents.filter(i => newRefs.includes(i._id));
+
+            // For common fields, take from the first selected indent if available
+            const firstIndent = selectedIndents[0];
+            const taskRef = firstIndent ? (firstIndent.taskReference || "") : "";
+            const shipToAddress = firstIndent ? (firstIndent.siteName || "") : "";
+            const shipToContactPerson = firstIndent ? (firstIndent.siteEngineerName || "") : "";
+
+            // Gather all items from all selected indents
+            if (!initialData) {
+                let gatheredItems = [];
+                selectedIndents.forEach(indent => {
+                    if (indent.items && indent.items.length > 0) {
+                        const prefilledItems = indent.items.map(item => ({
+                            _sourceIndentId: indent._id,
+                            materialDescription: item.materialDescription || item.description || "",
+                            unit: item.unit || "",
+                            quantity: item.requiredQuantity || item.orderQuantity || item.quantity ? Number(item.requiredQuantity || item.orderQuantity || item.quantity) : 0,
+                            rate: "",
+                            baseAmount: 0,
+                            taxRate: "18",
+                            taxAmount: 0,
+                            amount: 0
+                        }));
+                        gatheredItems = [...gatheredItems, ...prefilledItems];
+                    }
+                });
+                console.log("gatheredItems:", gatheredItems);
+
+                setItems(currentItems => {
+                    console.log("currentItems before merge:", currentItems);
+                    // Keep items that were manually added
+                    const manualItems = currentItems.filter(i => !i._sourceIndentId && (i.materialDescription || i.quantity || i.rate));
+
+                    // Keep items from indents that are STILL selected, preserving their edits
+                    const mergedItems = gatheredItems.map(gatheredItem => {
+                        const existingMatch = currentItems.find(ci => ci._sourceIndentId === gatheredItem._sourceIndentId && ci.materialDescription === gatheredItem.materialDescription);
+                        return existingMatch ? existingMatch : gatheredItem;
+                    });
+
+                    const finalItems = [...mergedItems, ...manualItems];
+                    console.log("finalItems after merge:", finalItems);
+                    return finalItems.length > 0 ? finalItems : [{ materialDescription: "", unit: "", quantity: "", rate: "", baseAmount: 0, taxRate: "18", taxAmount: 0, amount: 0 }];
+                });
+            }
+
+            return {
+                ...prev,
+                indentReferences: newRefs,
+                taskReference: taskRef,
+                shipToAddress: shipToAddress,
+                shipToContactPerson: shipToContactPerson
+            };
+        });
     };
 
     const handleInputChange = (field, value) => {
@@ -154,23 +214,47 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
 
     const handleItemChange = (index, field, value) => {
         const newItems = [...items];
+
+        // Prevent infinite loops where "10." becomes "10" by only 
+        // updating values if they are truly different (especially for text inputs).
         newItems[index][field] = value;
 
         // Auto-calculate amounts when dependencies change
-        if (['quantity', 'rate', 'taxAmount'].includes(field)) {
-            const qty = Number(field === 'quantity' ? value : newItems[index].quantity) || 0;
-            const rate = Number(field === 'rate' ? value : newItems[index].rate) || 0;
-            const tax = Number(field === 'taxAmount' ? value : newItems[index].taxAmount) || 0;
+        if (['quantity', 'rate', 'taxRate', 'taxAmount'].includes(field)) {
+            // Use raw value if changing quantity or rate, else parse from current state
+            const rawQty = field === 'quantity' ? value : newItems[index].quantity;
+            const rawRate = field === 'rate' ? value : newItems[index].rate;
 
-            newItems[index].baseAmount = qty * rate;
-            newItems[index].amount = newItems[index].baseAmount + tax;
+            // Allow trailing decimals while typing, but parse correctly for math
+            const qty = Number(rawQty) || 0;
+            const rate = Number(rawRate) || 0;
+
+            const baseAmount = qty * rate;
+            newItems[index].baseAmount = baseAmount;
+
+            let taxAmt = 0;
+            if (field === 'taxAmount') {
+                // If the user manually edited taxAmount, use that
+                taxAmt = Number(value) || 0;
+                newItems[index].taxAmount = taxAmt;
+                // You COULD recalculate taxRate here, but usually, we just let taxAmount override.
+            } else {
+                // Otherwise calculate taxAmount from taxRate
+                const rawTaxRate = field === 'taxRate' ? value : newItems[index].taxRate;
+                const taxRatePercent = Number(rawTaxRate) || 0;
+                taxAmt = baseAmount * (taxRatePercent / 100);
+                // Keep decimal precision without weird floating point bugs
+                newItems[index].taxAmount = Math.round(taxAmt * 100) / 100;
+            }
+
+            // Finally, set the total amount based on the fresh calculations
+            newItems[index].amount = Math.round((baseAmount + taxAmt) * 100) / 100;
         }
 
         setItems(newItems);
     };
 
-    const handleFileChange = (e, quotationKey) => {
-        const file = e.target.files[0];
+    const handleFileChange = (file, quotationKey) => {
         if (file) {
             setQuotationFiles(prev => ({
                 ...prev,
@@ -180,7 +264,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
     };
 
     const addItem = () => {
-        setItems([...items, { materialDescription: "", unit: "", quantity: "", rate: "", baseAmount: 0, taxAmount: 0, amount: 0 }]);
+        setItems([...items, { materialDescription: "", unit: "", quantity: "", rate: "", baseAmount: 0, taxRate: "18", taxAmount: 0, amount: 0, _sourceIndentId: null }]);
     };
 
     const removeItem = (index) => {
@@ -200,8 +284,8 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!formData.poNumber || !formData.indentReference || !formData.vendorName) {
-            toast.error("Please fill in PO Number, Indent Reference, and Vendor Name.");
+        if (!formData.poNumber || formData.indentReferences.length === 0 || !formData.vendorName) {
+            toast.error("Please fill in PO Number, Select at least one Indent, and Vendor Name.");
             return;
         }
 
@@ -277,7 +361,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                         onChange={(e) => handleInputChange("poNumber", e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                         placeholder="e.g. PO-2023-001"
-                        disabled={!!initialData} // Usually PO number shouldn't change after creation
+                        disabled={!!initialData?._id} // Usually PO number shouldn't change after creation
                     />
                 </div>
 
@@ -293,22 +377,41 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                 </div>
 
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Reference Indent</label>
-                    <Select
-                        value={formData.indentReference}
-                        onValueChange={handleIndentChange}
-                    >
-                        <SelectTrigger className="w-full bg-white/5 border-white/10 rounded-xl">
-                            <SelectValue placeholder="Select Indent Number" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#1e1e2d] border-white/10 max-h-[300px]">
-                            {indents.map((indent) => (
-                                <SelectItem key={indent._id} value={indent._id} className="text-foreground hover:bg-white/5">
-                                    {indent.indentNumber} ({indent.siteName})
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <label className="text-sm font-medium text-muted-foreground">Reference Indent(s)</label>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-left flex items-center justify-between text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all hover:bg-white/10"
+                            >
+                                <span className={formData.indentReferences.length === 0 ? "text-muted-foreground" : "truncate"}>
+                                    {formData.indentReferences.length > 0
+                                        ? `${formData.indentReferences.length} Indent(s) Selected`
+                                        : "Select Indents"}
+                                </span>
+                                <ChevronDown className="w-4 h-4 opacity-50" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-[300px] max-h-[300px] overflow-y-auto">
+                            {indents.length > 0 ? (
+                                indents.map((indent) => (
+                                    <DropdownMenuCheckboxItem
+                                        key={indent._id}
+                                        checked={formData.indentReferences.includes(indent._id)}
+                                        onCheckedChange={() => handleIndentToggle(indent._id)}
+                                        className="cursor-pointer"
+                                    >
+                                        <div className="flex flex-col">
+                                            <span>{indent.indentNumber}</span>
+                                            <span className="text-xs text-muted-foreground">{indent.siteName}</span>
+                                        </div>
+                                    </DropdownMenuCheckboxItem>
+                                ))
+                            ) : (
+                                <DropdownMenuItem disabled>No verified idents found</DropdownMenuItem>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
 
                 <div className="space-y-2">
@@ -325,16 +428,51 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                 <div className="space-y-4 lg:col-span-3 mt-4 border-t border-white/10 pt-6">
                     <h4 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-4">Vendor Details</h4>
                     <div className="grid md:grid-cols-3 gap-6">
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative">
                             <label className="text-sm font-medium text-muted-foreground">Vendor Name</label>
-                            <input
-                                type="text"
-                                required
-                                value={formData.vendorName}
-                                onChange={(e) => handleInputChange("vendorName", e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                                placeholder="Supplier / vendor name"
-                            />
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.vendorName}
+                                    onChange={(e) => handleInputChange("vendorName", e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all pr-10"
+                                    placeholder="Supplier / vendor name"
+                                />
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button
+                                            type="button"
+                                            className="absolute right-0 top-0 bottom-0 px-3 hover:bg-white/5 rounded-r-xl border-l border-white/10 flex items-center justify-center text-muted-foreground transition-colors"
+                                        >
+                                            <ChevronDown className="w-4 h-4" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-[240px] max-h-[300px] overflow-y-auto">
+                                        {vendors.length > 0 ? vendors.map((vendor) => (
+                                            <DropdownMenuItem
+                                                key={vendor._id}
+                                                onClick={() => {
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        vendorName: vendor.value,
+                                                        vendorAddress: vendor.vendorAddress || prev.vendorAddress,
+                                                        vendorGst: vendor.vendorGst || prev.vendorGst,
+                                                        vendorContactNo: vendor.vendorContactNo || prev.vendorContactNo
+                                                    }));
+                                                }}
+                                                className="cursor-pointer"
+                                            >
+                                                {vendor.value}
+                                            </DropdownMenuItem>
+                                        )) : (
+                                            <DropdownMenuItem disabled>
+                                                No vendors found
+                                            </DropdownMenuItem>
+                                        )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
                         </div>
                         <div className="space-y-2 md:col-span-2">
                             <label className="text-sm font-medium text-muted-foreground">Vendor Address</label>
@@ -433,10 +571,12 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                     <div className="min-w-[800px]">
                         {/* Table Header */}
                         <div className="grid grid-cols-12 border-b border-white/10 bg-white/5 font-medium text-xs uppercase text-muted-foreground">
-                            <div className="col-span-4 p-3 text-left border-r border-white/10">Material Description</div>
-                            <div className="col-span-2 p-3 text-center border-r border-white/10">Unit</div>
+                            <div className="col-span-3 p-3 text-left border-r border-white/10">Material Description</div>
+                            <div className="col-span-1 p-3 text-center border-r border-white/10">Unit</div>
                             <div className="col-span-1 p-3 text-center border-r border-white/10">QTY</div>
                             <div className="col-span-2 p-3 text-center border-r border-white/10">Rate (₹)</div>
+                            <div className="col-span-1 p-3 text-center border-r border-white/10">Total w/o Tax</div>
+                            <div className="col-span-1 p-3 text-center border-r border-white/10">Tax %</div>
                             <div className="col-span-1 p-3 text-center border-r border-white/10">Tax (₹)</div>
                             <div className="col-span-2 p-3 text-center">Amount (₹)</div>
                         </div>
@@ -452,7 +592,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                                         exit={{ opacity: 0, height: 0 }}
                                         className="grid grid-cols-12 group relative min-h-[45px] hover:bg-white/5 transition-colors"
                                     >
-                                        <div className="col-span-4 border-r border-white/10 relative">
+                                        <div className="col-span-3 border-r border-white/10 relative">
                                             <textarea
                                                 className="w-full h-full bg-transparent text-foreground outline-none resize-none overflow-hidden p-3 placeholder:text-muted-foreground/50 text-sm focus:bg-white/5 transition-colors"
                                                 value={item.materialDescription}
@@ -462,7 +602,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                                                 required
                                             />
                                         </div>
-                                        <div className="col-span-2 border-r border-white/10">
+                                        <div className="col-span-1 border-r border-white/10">
                                             <input
                                                 type="text"
                                                 className="w-full h-full bg-transparent text-foreground outline-none text-center p-3 placeholder:text-muted-foreground/50 text-sm focus:bg-white/5 transition-colors"
@@ -495,6 +635,40 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                                                 placeholder="0.00"
                                                 required
                                             />
+                                        </div>
+                                        <div className="col-span-1 border-r border-white/10 flex items-center justify-center p-3">
+                                            <span className="text-sm text-muted-foreground">
+                                                ₹{Number(item.baseAmount || 0).toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <div className="col-span-1 border-r border-white/10 relative min-h-[45px]">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                className="w-full h-full absolute inset-0 bg-transparent text-foreground outline-none text-center pr-6 pl-2 placeholder:text-muted-foreground/50 text-sm focus:bg-white/5 transition-colors z-10"
+                                                value={item.taxRate}
+                                                onChange={(e) => handleItemChange(index, "taxRate", e.target.value)}
+                                                placeholder="%"
+                                            />
+                                            <div className="absolute right-0 top-0 bottom-0 z-20 flex items-center pr-1">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger className="w-5 h-8 border-0 bg-transparent shadow-none focus:ring-0 p-0 flex items-center justify-center text-muted-foreground hover:text-foreground">
+                                                        <ChevronDown className="h-4 w-4" />
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="bg-[#1e1e2d] border-white/10 min-w-[60px]">
+                                                        {[0, 5, 12, 18, 28].map(tax => (
+                                                            <DropdownMenuItem
+                                                                key={tax}
+                                                                onClick={() => handleItemChange(index, "taxRate", tax.toString())}
+                                                                className="cursor-pointer justify-center"
+                                                            >
+                                                                {tax}%
+                                                            </DropdownMenuItem>
+                                                        ))}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
                                         </div>
                                         <div className="col-span-1 border-r border-white/10">
                                             <input
@@ -581,22 +755,13 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
             </div>
 
             {/* Authorizations Section */}
-            <div className="grid md:grid-cols-4 gap-4 pt-6 border-t border-white/10 mt-6">
+            <div className="grid md:grid-cols-3 gap-4 pt-6 border-t border-white/10 mt-6">
                 <div className="space-y-2">
                     <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Prepared By</label>
                     <input
                         type="text"
                         value={formData.preparedBy}
                         onChange={(e) => handleInputChange("preparedBy", e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
-                    />
-                </div>
-                <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Requisitioned By</label>
-                    <input
-                        type="text"
-                        value={formData.requisitionedBy}
-                        onChange={(e) => handleInputChange("requisitionedBy", e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
                     />
                 </div>
@@ -633,12 +798,15 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                                 </label>
                             </div>
 
-                            <input
-                                type="file"
-                                accept=".pdf,.png,.jpg,.jpeg"
-                                onChange={(e) => handleFileChange(e, `quotation${num}`)}
-                                className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/20 file:text-primary hover:file:bg-primary/30 transition-all"
-                            />
+                            <FileUploadSelector
+                                accept="image/*,application/pdf,.pdf,.png,.jpg,.jpeg"
+                                onFileSelect={(file) => handleFileChange(file, `quotation${num}`)}
+                                title={`Upload Quotation ${num}`}
+                            >
+                                <button type="button" className="block w-full text-left text-sm text-primary bg-primary/20 hover:bg-primary/30 py-2 px-4 rounded-full font-semibold transition-all">
+                                    {quotationFiles[`quotation${num}`] ? quotationFiles[`quotation${num}`].name : "Select File or Take Photo"}
+                                </button>
+                            </FileUploadSelector>
 
                             {formData[`quotation${num}Url`] && (
                                 <div className="flex items-center gap-2 text-xs text-green-400 bg-green-400/10 px-3 py-1.5 rounded-md">

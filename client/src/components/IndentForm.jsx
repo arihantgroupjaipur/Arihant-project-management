@@ -13,6 +13,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
 
 const IndentForm = ({ onSuccess, initialData = null }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,8 +43,8 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
         indentNumber: "",
         taskReference: "",
         siteEngineerName: "",
-        materialGroup: "Civil",
-        siteName: "Arihant SKH",
+        materialGroup: "",
+        siteName: "",
         workDescription: "",
         blockFloorWork: "",
         leadTime: "",
@@ -58,8 +65,8 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                 indentNumber: initialData.indentNumber || "",
                 taskReference: initialData.taskReference || "",
                 siteEngineerName: initialData.siteEngineerName || "",
-                materialGroup: initialData.materialGroup || "Civil",
-                siteName: initialData.siteName || "Arihant SKH",
+                materialGroup: initialData.materialGroup || "",
+                siteName: initialData.siteName || "",
                 workDescription: initialData.workDescription || "",
                 blockFloorWork: initialData.blockFloorWork || "",
                 leadTime: initialData.leadTime || "",
@@ -138,13 +145,15 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
         const signatures = captureSignatures();
 
         setIsSubmitting(true);
+        const loadingToast = toast.loading((initialData && initialData._id) ? "Updating Indent..." : "Submitting Indent...");
+
         try {
             if (initialData && initialData._id) {
                 await updateIndent(initialData._id, { ...formData, ...signatures, items });
-                toast.success("Indent updated successfully");
+                toast.success("Indent updated successfully", { id: loadingToast });
             } else {
                 await createIndent({ ...formData, ...signatures, items });
-                toast.success("Site Requirement submitted successfully");
+                toast.success("Site Requirement submitted successfully", { id: loadingToast });
             }
 
             onSuccess && onSuccess();
@@ -156,8 +165,8 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                     indentNumber: "",
                     taskReference: "",
                     siteEngineerName: "",
-                    materialGroup: "Civil",
-                    siteName: "Arihant SKH",
+                    materialGroup: "",
+                    siteName: "",
                     workDescription: "",
                     blockFloorWork: "",
                     leadTime: "",
@@ -173,8 +182,8 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
 
         } catch (error) {
             console.error(error);
-            const msg = error?.response?.data?.message || (initialData ? "Failed to update indent" : "Failed to submit request");
-            toast.error(msg);
+            const msg = error?.response?.data?.message || ((initialData && initialData._id) ? "Failed to update indent" : "Failed to submit request");
+            toast.error(msg, { id: loadingToast });
         } finally {
             setIsSubmitting(false);
         }
@@ -195,7 +204,7 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                     <p>2nd Floor, Class Of Pearl, Income Tax Colony, Tank Road, Durgapura, Jaipur, Rajasthan, 302018</p>
                 </div>
                 <h3 className="text-xl font-bold text-center mt-4 mb-2">
-                    {initialData ? "EDIT MATERIAL INDENT / SITE REQUIREMENT" : "MATERIAL INDENT / SITE REQUIREMENT FORM"}
+                    {(initialData && initialData._id) ? "EDIT MATERIAL INDENT / SITE REQUIREMENT" : "MATERIAL INDENT / SITE REQUIREMENT FORM"}
                 </h3>
             </div>
 
@@ -262,38 +271,77 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                 {/* Row 2 */}
                 <div>
                     <label className="text-sm font-medium text-muted-foreground block mb-2">Site Name</label>
-                    <select
-                        value={formData.siteName}
-                        onChange={(e) => handleInputChange("siteName", e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/10 text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-sm"
-                    >
-                        <option value="">— Select Site —</option>
-                        {siteNames.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    <div className="relative flex w-full items-stretch rounded-lg bg-black/20 border border-white/10 overflow-hidden focus-within:ring-2 focus-within:ring-orange-500/50">
+                        <input
+                            type="text"
+                            value={formData.siteName}
+                            onChange={(e) => handleInputChange("siteName", e.target.value)}
+                            placeholder="Type or select site..."
+                            className="flex-1 bg-transparent px-4 py-3 text-foreground focus:outline-none text-sm"
+                        />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger className="flex items-center justify-center px-3 border-l border-white/10 hover:bg-white/5 transition-colors group">
+                                <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-[200px] border-white/10 bg-[#1e1e2d]">
+                                {siteNames.map(s => (
+                                    <DropdownMenuItem key={s} onClick={() => handleInputChange("siteName", s)} className="hover:bg-white/10 focus:bg-white/10 cursor-pointer">
+                                        {s}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
 
                 <div>
                     <label className="text-sm font-medium text-muted-foreground block mb-2">Site Engineer Name</label>
-                    <select
-                        value={formData.siteEngineerName}
-                        onChange={(e) => handleInputChange("siteEngineerName", e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/10 text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-sm"
-                    >
-                        <option value="">— Select Site Engineer —</option>
-                        {siteEngineers.map(e => <option key={e} value={e}>{e}</option>)}
-                    </select>
+                    <div className="relative flex w-full items-stretch rounded-lg bg-black/20 border border-white/10 overflow-hidden focus-within:ring-2 focus-within:ring-orange-500/50">
+                        <input
+                            type="text"
+                            value={formData.siteEngineerName}
+                            onChange={(e) => handleInputChange("siteEngineerName", e.target.value)}
+                            placeholder="Type or select engineer..."
+                            className="flex-1 bg-transparent px-4 py-3 text-foreground focus:outline-none text-sm"
+                        />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger className="flex items-center justify-center px-3 border-l border-white/10 hover:bg-white/5 transition-colors group">
+                                <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-[200px] border-white/10 bg-[#1e1e2d]">
+                                {siteEngineers.map(e => (
+                                    <DropdownMenuItem key={e} onClick={() => handleInputChange("siteEngineerName", e)} className="hover:bg-white/10 focus:bg-white/10 cursor-pointer">
+                                        {e}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
 
                 <div>
                     <label className="text-sm font-medium text-muted-foreground block mb-2">Material Group</label>
-                    <select
-                        value={formData.materialGroup}
-                        onChange={(e) => handleInputChange("materialGroup", e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/10 text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-sm"
-                    >
-                        <option value="">— Select Material Group —</option>
-                        {materialGroups.map(g => <option key={g} value={g}>{g}</option>)}
-                    </select>
+                    <div className="relative flex w-full items-stretch rounded-lg bg-black/20 border border-white/10 overflow-hidden focus-within:ring-2 focus-within:ring-orange-500/50">
+                        <input
+                            type="text"
+                            value={formData.materialGroup}
+                            onChange={(e) => handleInputChange("materialGroup", e.target.value)}
+                            placeholder="Type or select group..."
+                            className="flex-1 bg-transparent px-4 py-3 text-foreground focus:outline-none text-sm"
+                        />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger className="flex items-center justify-center px-3 border-l border-white/10 hover:bg-white/5 transition-colors group">
+                                <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-[200px] border-white/10 bg-[#1e1e2d]">
+                                {materialGroups.map(g => (
+                                    <DropdownMenuItem key={g} onClick={() => handleInputChange("materialGroup", g)} className="hover:bg-white/10 focus:bg-white/10 cursor-pointer">
+                                        {g}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
 
 
@@ -539,9 +587,9 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                 className="w-full py-4 rounded-xl font-bold text-lg bg-orange-500 hover:bg-orange-600 text-white shadow-lg hover:shadow-orange-500/20 transition-all disabled:opacity-60 flex items-center justify-center gap-2 mt-8"
                 whileTap={{ scale: 0.98 }}
             >
-                {isSubmitting ? (initialData ? "Updating..." : "Submitting...") : (
+                {isSubmitting ? ((initialData && initialData._id) ? "Updating..." : "Submitting...") : (
                     <>
-                        <Send className="w-5 h-5" /> {initialData ? "Update Indent" : "Submit Indent Requirement"}
+                        <Send className="w-5 h-5" /> {(initialData && initialData._id) ? "Update Indent" : "Submit Indent Requirement"}
                     </>
                 )}
             </motion.button>

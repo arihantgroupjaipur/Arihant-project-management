@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Pencil, Trash2, ChevronDown, Sheet, File, FileText, ShoppingCart } from "lucide-react";
+import { Pencil, Trash2, ChevronDown, Sheet, File, FileText, ShoppingCart, FileCheck, Upload, Eye, X, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import { generatePurchaseOrderPDF } from '@/utils/purchaseOrderPdfExport';
 import { generatePurchaseOrderExcel } from '@/utils/purchaseOrderExcelExport';
 import { generatePurchaseOrderCSV } from '@/utils/purchaseOrderCsvExport';
 import { uploadService } from '@/services/uploadService';
+import { uploadPurchaseOrderPdf, removePurchaseOrderPdf } from '@/services/purchaseOrderService';
+import { useQueryClient } from '@tanstack/react-query';
 
 const PurchaseOrdersList = ({
     purchaseOrders,
@@ -15,10 +18,47 @@ const PurchaseOrdersList = ({
     searchQuery,
     filterStatus,
     canChangeStatus,
-    onStatusChange
+    onStatusChange,
+    onNavigateToVerification
 }) => {
     const [expandedId, setExpandedId] = useState(null);
     const [deleteModalData, setDeleteModalData] = useState(null);
+    const [uploadingId, setUploadingId] = useState(null);
+    const queryClient = useQueryClient();
+
+    const handlePdfUpload = async (po, file) => {
+        if (!file) return;
+        setUploadingId(po._id);
+        try {
+            await uploadPurchaseOrderPdf(po._id, file);
+            queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+            toast.success('PDF uploaded and attached to Purchase Order!');
+        } catch (err) {
+            toast.error('Failed to upload PDF');
+        } finally {
+            setUploadingId(null);
+        }
+    };
+
+    const handleViewPdf = async (po) => {
+        try {
+            const url = await uploadService.getSignedUrl(po.uploadedPdf);
+            window.open(url, '_blank');
+        } catch {
+            toast.error('Failed to open file');
+        }
+    };
+
+    const handleRemovePdf = async (po) => {
+        try {
+            await uploadService.deleteImage(po.uploadedPdf);
+            await removePurchaseOrderPdf(po._id);
+            queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+            toast.success('Attachment removed');
+        } catch {
+            toast.error('Failed to remove attachment');
+        }
+    };
 
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
@@ -38,7 +78,7 @@ const PurchaseOrdersList = ({
                         po.poNumber?.toLowerCase().includes(q) ||
                         po.vendorName?.toLowerCase().includes(q) ||
                         po.taskReference?.toLowerCase().includes(q) ||
-                        po.indentReference?.indentNumber?.toLowerCase().includes(q);
+                        (po.indentReferences && po.indentReferences.some(i => i?.indentNumber?.toLowerCase().includes(q)));
 
                     const matchStatus = filterStatus === 'all' || po.status === filterStatus;
                     return matchSearch && matchStatus;
@@ -55,9 +95,9 @@ const PurchaseOrdersList = ({
                         animate={{ opacity: 1, y: 0 }}
                         className="glass-card overflow-hidden"
                     >
-                        <button
+                        <div
                             onClick={() => setExpandedId(expandedId === po._id ? null : po._id)}
-                            className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition-colors text-left"
+                            className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition-colors text-left cursor-pointer"
                         >
                             <div className="flex items-center gap-4">
                                 <div className="p-3 bg-primary/20 rounded-xl text-primary shrink-0">
@@ -92,7 +132,7 @@ const PurchaseOrdersList = ({
                                     <p className="text-sm text-muted-foreground flex gap-3 flex-wrap">
                                         <span>Vendor: <strong className="font-medium text-foreground/80">{po.vendorName}</strong></span>
                                         <span className="opacity-50">•</span>
-                                        <span>Indent: {po.indentReference?.indentNumber || 'N/A'}</span>
+                                        <span>Indent: {po.indentReferences?.map(i => i?.indentNumber).join(', ') || 'N/A'}</span>
                                         <span className="opacity-50">•</span>
                                         <span>Date: {formatDate(po.date)}</span>
                                     </p>
@@ -141,35 +181,97 @@ const PurchaseOrdersList = ({
                                             <File className="w-3.5 h-3.5" />
                                             <span className="text-xs font-medium">CSV</span>
                                         </motion.button>
+
+                                        {/* Upload PDF */}
+                                        {uploadingId === po._id ? (
+                                            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 text-muted-foreground ml-2">
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                <span className="text-xs">Uploading…</span>
+                                            </div>
+                                        ) : po.uploadedPdf ? (
+                                            <>
+                                                <motion.button
+                                                    initial={{ opacity: 0, scale: 0.8 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    onClick={(e) => { e.stopPropagation(); handleViewPdf(po); }}
+                                                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 transition-colors ml-2 border border-sky-500/20"
+                                                    title="View uploaded PDF"
+                                                >
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                    <span className="text-xs font-medium">View PDF</span>
+                                                </motion.button>
+                                                {isAdmin && (
+                                                    <motion.button
+                                                        initial={{ opacity: 0, scale: 0.8 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        onClick={(e) => { e.stopPropagation(); handleRemovePdf(po); }}
+                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors border border-red-500/20"
+                                                        title="Remove uploaded PDF"
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </motion.button>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <motion.label
+                                                initial={{ opacity: 0, scale: 0.8 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                transition={{ delay: 0.15 }}
+                                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 transition-colors ml-2 border border-sky-500/20 cursor-pointer"
+                                                title="Upload PDF for this Purchase Order"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <Upload className="w-3.5 h-3.5" />
+                                                <span className="text-xs font-medium">Upload PDF</span>
+                                                <input
+                                                    type="file"
+                                                    accept="application/pdf,.pdf,.doc,.docx,image/*"
+                                                    className="hidden"
+                                                    onChange={(e) => handlePdfUpload(po, e.target.files[0])}
+                                                />
+                                            </motion.label>
+                                        )}
                                     </div>
                                 )}
 
-                                {isAdmin && (
-                                    <div className="flex items-center gap-2 mr-4" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-1 sm:gap-2 mr-2 sm:mr-4" onClick={(e) => e.stopPropagation()}>
+                                    {onNavigateToVerification && (
                                         <button
-                                            onClick={() => onEdit(po)}
-                                            className="p-2 hover:bg-blue-500/20 rounded-lg text-blue-400 transition-colors"
-                                            title="Edit PO"
+                                            onClick={() => onNavigateToVerification(po._id)}
+                                            className="p-2 hover:bg-emerald-500/20 rounded-lg text-emerald-400 transition-colors"
+                                            title="Go to Material Verification"
                                         >
-                                            <Pencil className="w-4 h-4" />
+                                            <FileCheck className="w-4 h-4" />
                                         </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setDeleteModalData(po);
-                                            }}
-                                            className="p-2 hover:bg-red-500/20 rounded-lg text-red-400 transition-colors"
-                                            title="Delete PO"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                )}
+                                    )}
+
+                                    {isAdmin && (
+                                        <>
+                                            <button
+                                                onClick={() => onEdit(po)}
+                                                className="p-2 hover:bg-blue-500/20 rounded-lg text-blue-400 transition-colors"
+                                                title="Edit PO"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setDeleteModalData(po);
+                                                }}
+                                                className="p-2 hover:bg-red-500/20 rounded-lg text-red-400 transition-colors"
+                                                title="Delete PO"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
                                 <motion.div animate={{ rotate: expandedId === po._id ? 180 : 0 }} transition={{ duration: 0.2 }}>
                                     <ChevronDown className="w-5 h-5 text-muted-foreground" />
                                 </motion.div>
                             </div>
-                        </button>
+                        </div>
 
                         <AnimatePresence>
                             {expandedId === po._id && (
@@ -329,14 +431,10 @@ const PurchaseOrdersList = ({
                                         </div>
 
                                         {/* Authorizations Bar */}
-                                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-white/10 text-sm">
+                                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 pt-4 border-t border-white/10 text-sm">
                                             <div className="bg-black/20 p-3 rounded-lg border border-white/5">
                                                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Prepared By</p>
                                                 <p className="font-medium text-foreground/90">{po.preparedBy || "-"}</p>
-                                            </div>
-                                            <div className="bg-black/20 p-3 rounded-lg border border-white/5">
-                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Requisitioned By</p>
-                                                <p className="font-medium text-foreground/90">{po.requisitionedBy || "-"}</p>
                                             </div>
                                             <div className="bg-black/20 p-3 rounded-lg border border-white/5">
                                                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Verified By</p>

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, ClipboardCheck, Calendar, Building, User, FileText, Sheet, File, CheckCircle2, Image as ImageIcon, X, Eye, Trash2, Loader2, Edit } from "lucide-react";
+import { ChevronDown, ClipboardCheck, Calendar, Building, User, FileText, Sheet, File, CheckCircle2, Image as ImageIcon, X, Eye, Trash2, Loader2, Edit, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { workCompletionService } from "@/services/workCompletionService";
 import { uploadService } from "@/services/uploadService";
+import FileUploadSelector from "./FileUploadSelector";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -20,10 +21,11 @@ import { generateWorkCompletionPDF } from "@/utils/workCompletionPdfExport";
 import { generateWorkCompletionExcel } from "@/utils/workCompletionExcelExport";
 import { generateWorkCompletionCSV } from "@/utils/workCompletionCsvExport";
 
-const WorkCompletionsList = ({ workCompletions, onRefresh, isAdmin, onEdit, onDelete }) => {
+const WorkCompletionsList = ({ workCompletions, onRefresh, isAdmin, onEdit, onDelete, onCreateNew }) => {
     const [expandedId, setExpandedId] = useState(null);
     const [selectedImage, setSelectedImage] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [uploadingId, setUploadingId] = useState(null);
     const navigate = useNavigate();
     const queryClient = useQueryClient();
 
@@ -48,9 +50,36 @@ const WorkCompletionsList = ({ workCompletions, onRefresh, isAdmin, onEdit, onDe
         }
     };
 
+    const handleFileUpload = async (completion, file) => {
+        if (!file) return;
+        setUploadingId(completion._id);
+
+        try {
+            toast.info(`Uploading document for WO #${completion.workOrderNumber}...`);
+            const uploadResult = await uploadService.uploadImage(file);
+
+            await workCompletionService.updateWorkCompletion(completion._id, {
+                uploadedPdf: uploadResult.key
+            });
+
+            toast.success("Certification document uploaded successfully!");
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            console.error("Upload error:", error);
+            toast.error("Failed to upload document");
+        } finally {
+            setUploadingId(null);
+        }
+    };
+
     const formatDate = (date) => {
         if (!date) return 'N/A';
-        return new Date(date).toLocaleDateString();
+        const d = new Date(date);
+        if (isNaN(d)) return 'N/A';
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
     };
 
     const getChecklistStatus = (checklist) => {
@@ -122,7 +151,7 @@ const WorkCompletionsList = ({ workCompletions, onRefresh, isAdmin, onEdit, onDe
                 <h3 className="text-xl font-semibold mb-2">No Work Certifications Yet</h3>
                 <p className="text-muted-foreground mb-6">Create your first work completion certification to get started</p>
                 <motion.button
-                    onClick={() => navigate('/certification')}
+                    onClick={() => onCreateNew ? onCreateNew() : navigate('/certification')}
                     className="bg-orange-500 text-white px-6 py-3 rounded-xl font-semibold hover:brightness-110 transition-all"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -146,7 +175,7 @@ const WorkCompletionsList = ({ workCompletions, onRefresh, isAdmin, onEdit, onDe
                         <input type="text" placeholder="Search WO#, block, contractor, engineer…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 pr-4 py-2 text-sm rounded-xl bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-full sm:w-64" />
                     </div>
                     <motion.button
-                        onClick={() => navigate('/certification')}
+                        onClick={() => onCreateNew ? onCreateNew() : navigate('/certification')}
                         className="bg-orange-500 text-white px-4 py-2 rounded-xl font-semibold hover:brightness-110 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
@@ -236,6 +265,76 @@ const WorkCompletionsList = ({ workCompletions, onRefresh, isAdmin, onEdit, onDe
                                                     <span className="text-xs font-medium">Delete</span>
                                                 </motion.button>
                                             )}
+
+                                            <div className="flex items-center" onClick={e => e.stopPropagation()}>
+                                                {(!completion.uploadedPdf || isAdmin) && (
+                                                    <FileUploadSelector
+                                                        accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png"
+                                                        onFileSelect={(file) => handleFileUpload(completion, file)}
+                                                        title="Upload Original Certification Document"
+                                                    >
+                                                        <motion.button
+                                                            initial={{ opacity: 0, scale: 0.8 }}
+                                                            animate={{ opacity: 1, scale: 1 }}
+                                                            disabled={uploadingId === completion._id}
+                                                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 transition-colors border border-white/5 ${completion.uploadedPdf ? 'text-primary' : 'text-foreground'}`}
+                                                            title={completion.uploadedPdf ? "Replace Document" : "Upload Document"}
+                                                        >
+                                                            {uploadingId === completion._id ? (
+                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                            ) : (
+                                                                <UploadCloud className="w-3.5 h-3.5" />
+                                                            )}
+                                                            <span className="text-xs font-medium">{completion.uploadedPdf ? 'Replace' : 'Upload'}</span>
+                                                        </motion.button>
+                                                    </FileUploadSelector>
+                                                )}
+
+                                                {completion.uploadedPdf && (
+                                                    <motion.button
+                                                        initial={{ opacity: 0, scale: 0.8 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            try {
+                                                                const url = await uploadService.getSignedUrl(completion.uploadedPdf);
+                                                                const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(completion.uploadedPdf);
+                                                                if (isImage) {
+                                                                    setSelectedImage(url);
+                                                                } else {
+                                                                    window.open(url, '_blank');
+                                                                }
+                                                            } catch (err) {
+                                                                console.error('Failed to view file', err);
+                                                                toast.error('Failed to retrieve file URL');
+                                                            }
+                                                        }}
+                                                        className="ml-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary transition-colors"
+                                                        title="View Uploaded Document"
+                                                    >
+                                                        <Eye className="w-3.5 h-3.5" />
+                                                        <span className="text-xs font-medium">View</span>
+                                                    </motion.button>
+                                                )}
+
+                                                {completion.uploadedPdf && isAdmin && (
+                                                    <motion.button
+                                                        initial={{ opacity: 0, scale: 0.8 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            workCompletionService.updateWorkCompletion(completion._id, { uploadedPdf: null })
+                                                                .then(() => toast.success("Document removed"))
+                                                                .then(() => onRefresh && onRefresh())
+                                                                .catch((err) => toast.error("Failed to remove document"));
+                                                        }}
+                                                        className="ml-1 p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-colors"
+                                                        title="Delete Document"
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </motion.button>
+                                                )}
+                                            </div>
 
                                             <motion.button
                                                 initial={{ opacity: 0, scale: 0.8 }}

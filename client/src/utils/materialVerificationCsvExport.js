@@ -21,7 +21,7 @@ export const exportMaterialVerificationCsv = (pos) => {
                 po.vendorAddress || '',
                 po.vendorGst || '',
                 po.taskReference || '',
-                po.indentReference?.indentNumber || '',
+                po.indentReferences?.map(i => i?.indentNumber).join(', ') || '',
                 po.materialVerificationStatus || 'Pending',
                 '', '', '', '', ''
             ]);
@@ -35,7 +35,7 @@ export const exportMaterialVerificationCsv = (pos) => {
                     po.vendorAddress || '',
                     po.vendorGst || '',
                     po.taskReference || '',
-                    po.indentReference?.indentNumber || '',
+                    po.indentReferences?.map(i => i?.indentNumber).join(', ') || '',
                     po.materialVerificationStatus || 'Pending',
                     idx + 1,
                     item.materialDescription || '',
@@ -44,6 +44,26 @@ export const exportMaterialVerificationCsv = (pos) => {
                     item.receivedQuantity || 0,
                 ]);
             });
+        }
+
+        if (po.receipts && po.receipts.length > 0) {
+            rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']); // empty row
+            rows.push(['Delivery Receipts History', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+            rows.push(['Delivery #', 'Date', 'Received By', 'Description', 'Qty Received', '', '', '', '', '', '', '', '', '']);
+            po.receipts.forEach((receipt, rIdx) => {
+                const rDate = receipt.date ? format(new Date(receipt.date), 'dd/MM/yyyy') : 'N/A';
+                (receipt.items || []).forEach((rItem, iIdx) => {
+                    rows.push([
+                        iIdx === 0 ? rIdx + 1 : '',
+                        iIdx === 0 ? rDate : '',
+                        iIdx === 0 ? (receipt.receivedBy || '') : '',
+                        rItem.materialDescription || '',
+                        rItem.quantityReceived || 0,
+                        '', '', '', '', '', '', '', '', ''
+                    ]);
+                });
+            });
+            rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']); // empty row
         }
     });
 

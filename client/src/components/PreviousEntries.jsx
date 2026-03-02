@@ -212,26 +212,42 @@ const PreviousEntries = ({ entries, onExport, isAdmin, onEdit, onDelete }) => {
                             transition={{ duration: 0.2 }}
                             className="overflow-hidden border-t border-white/10"
                           >
-                            {entry.labourDetails && entry.labourDetails.length > 0 ? (
+                            {entry.dailyProgressReports && entry.dailyProgressReports.length > 0 ? (
                               <div className="p-4 border-b border-white/5">
                                 <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                                  Labour Breakdown
+                                  Daily Progress Reports
                                 </h5>
                                 <div className="border rounded-lg border-white/10 overflow-hidden">
                                   <table className="w-full text-sm">
                                     <thead className="bg-white/5 text-muted-foreground text-xs uppercase">
                                       <tr>
                                         <th className="p-3 text-left">Contractor</th>
-                                        <th className="p-3 text-center">Planned</th>
-                                        <th className="p-3 text-center">Actual</th>
+                                        <th className="p-3 text-left">Work Order</th>
+                                        <th className="p-3 text-center">Planned Labour</th>
+                                        <th className="p-3 text-center">Actual Labour</th>
+                                        <th className="p-3 text-left">Planned Work</th>
+                                        <th className="p-3 text-left">Actual Work</th>
+                                        <th className="p-3 text-center">Status</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/10">
-                                      {entry.labourDetails.map((labour, idx) => (
+                                      {entry.dailyProgressReports.map((report, idx) => (
                                         <tr key={idx} className="hover:bg-white/5 transition-colors">
-                                          <td className="p-3 text-foreground font-medium">{labour.contractorName}</td>
-                                          <td className="p-3 text-center text-blue-400 font-semibold">{labour.plannedLabour}</td>
-                                          <td className="p-3 text-center text-green-400 font-semibold">{labour.actualLabour}</td>
+                                          <td className="p-3 text-foreground font-medium">{report.contractorName || '—'}</td>
+                                          <td className="p-3 text-foreground">{report.workOrderNo || '—'}</td>
+                                          <td className="p-3 text-center text-blue-400 font-semibold">{report.plannedLabour || 0}</td>
+                                          <td className="p-3 text-center text-green-400 font-semibold">{report.actualLabour || 0}</td>
+                                          <td className="p-3 text-foreground">{report.plannedWork || '—'}</td>
+                                          <td className="p-3 text-foreground">{report.actualWork || '—'}</td>
+                                          <td className="p-3 text-center">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${report.status === "Completed" ? "bg-green-500/10 text-green-500 border border-green-500/20" :
+                                                report.status === "In Progress" ? "bg-blue-500/10 text-blue-500 border border-blue-500/20" :
+                                                  report.status === "Pending" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20" :
+                                                    "bg-white/5 text-foreground border border-white/10"
+                                              }`}>
+                                              {report.status || '—'}
+                                            </span>
+                                          </td>
                                         </tr>
                                       ))}
                                     </tbody>
@@ -253,7 +269,6 @@ const PreviousEntries = ({ entries, onExport, isAdmin, onEdit, onDelete }) => {
                                         <th className="p-3 text-left">Material Name</th>
                                         <th className="p-3 text-center">Quantity</th>
                                         <th className="p-3 text-center">Unit</th>
-                                        <th className="p-3 text-left">Work Order Ref</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/10">
@@ -262,7 +277,6 @@ const PreviousEntries = ({ entries, onExport, isAdmin, onEdit, onDelete }) => {
                                           <td className="p-3 text-foreground font-medium">{mat.materialName}</td>
                                           <td className="p-3 text-center text-orange-400 font-semibold">{mat.totalQuantity}</td>
                                           <td className="p-3 text-center text-muted-foreground">{mat.unit}</td>
-                                          <td className="p-3 text-muted-foreground">{mat.workOrderReference || '—'}</td>
                                         </tr>
                                       ))}
                                     </tbody>

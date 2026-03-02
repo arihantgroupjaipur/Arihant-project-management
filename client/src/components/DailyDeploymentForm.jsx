@@ -14,10 +14,19 @@ import DailyProgressTable from "@/components/DailyProgressTable";
 import MaterialConsumptionTable from "@/components/MaterialConsumptionTable";
 import { entryService } from "@/services/entryService";
 import { workOrderService } from "@/services/workOrderService";
+import { getSiteLookups } from "@/services/siteLookupService";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
 
 const DailyDeploymentForm = ({ onSuccess, initialData }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [workOrders, setWorkOrders] = useState([]);
+    const [siteNames, setSiteNames] = useState([]);
     const [formData, setFormData] = useState({
         date: "",
         projectName: "",
@@ -35,6 +44,10 @@ const DailyDeploymentForm = ({ onSuccess, initialData }) => {
         workOrderService.getAllWorkOrders()
             .then(setWorkOrders)
             .catch(err => console.error("Failed to fetch work orders", err));
+
+        getSiteLookups('siteName')
+            .then(data => setSiteNames(data.map(item => item.value)))
+            .catch(err => console.error("Failed to fetch site names", err));
     }, []);
 
     // Pre-fill form when editing
@@ -161,20 +174,29 @@ const DailyDeploymentForm = ({ onSuccess, initialData }) => {
                     />
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            Site / Work Order <span className="text-red-400">*</span>
+                            Site <span className="text-red-400">*</span>
                         </label>
-                        <Select value={formData.projectName} onValueChange={handleSiteSelect}>
-                            <SelectTrigger className="h-11 bg-white/5 border-white/10">
-                                <SelectValue placeholder="Select Work Order (Site)" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {workOrders.map(wo => (
-                                    <SelectItem key={wo._id} value={wo.workOrderNumber}>
-                                        {wo.workOrderNumber} — {wo.workDescription?.substring(0, 30) || wo.workLocationName || ""}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="relative flex w-full items-stretch rounded-lg bg-black/20 border border-white/10 overflow-hidden focus-within:ring-2 focus-within:ring-primary/50">
+                            <input
+                                type="text"
+                                value={formData.projectName}
+                                onChange={(e) => handleInputChange("projectName", e.target.value)}
+                                placeholder="Type or select site..."
+                                className="flex-1 bg-transparent px-4 py-3 text-foreground focus:outline-none text-sm h-11"
+                            />
+                            <DropdownMenu>
+                                <DropdownMenuTrigger type="button" className="flex items-center justify-center px-3 border-l border-white/10 hover:bg-white/5 transition-colors group">
+                                    <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-[200px] border-white/10 bg-[#1e1e2d] z-[9999] max-h-[300px] overflow-y-auto">
+                                    {siteNames.map(s => (
+                                        <DropdownMenuItem key={s} onClick={() => handleInputChange("projectName", s)} className="hover:bg-white/10 focus:bg-white/10 cursor-pointer text-sm">
+                                            {s}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     </div>
                     <FloatingInput
                         type="text"

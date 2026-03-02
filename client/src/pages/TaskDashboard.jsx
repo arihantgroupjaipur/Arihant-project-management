@@ -11,12 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 const TaskDashboard = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { logout } = useAuth();
     const [showTaskForm, setShowTaskForm] = useState(false);
+    const [taskToDelete, setTaskToDelete] = useState(null);
 
     const { data: tasks = [], isLoading, isError } = useQuery({
         queryKey: ['tasks'],
@@ -46,8 +48,13 @@ const TaskDashboard = () => {
     });
 
     const handleDelete = (id) => {
-        if (window.confirm("Are you sure you want to delete this task?")) {
-            deleteTaskMutation.mutate(id);
+        setTaskToDelete(id);
+    };
+
+    const confirmDeleteTask = async () => {
+        if (taskToDelete) {
+            deleteTaskMutation.mutate(taskToDelete);
+            setTaskToDelete(null);
         }
     };
 
@@ -106,6 +113,13 @@ const TaskDashboard = () => {
                         >
                             <RefreshCw className="w-5 h-5" />
                         </button>
+                        <button
+                            onClick={handleLogout}
+                            className="p-2 md:hidden rounded-lg hover:bg-white/10 text-muted-foreground hover:text-red-400 transition-colors"
+                            title="Logout"
+                        >
+                            <LogOut className="w-5 h-5" />
+                        </button>
                         {!showTaskForm && (
                             <Button onClick={() => setShowTaskForm(true)} size="sm" className="gap-2">
                                 <Plus className="w-4 h-4" />
@@ -161,20 +175,26 @@ const TaskDashboard = () => {
                                             ) : (
                                                 tasks.map((task) => (
                                                     <tr key={task._id} className="hover:bg-white/5 transition-colors">
-                                                        <td className="p-4 text-muted-foreground">{new Date(task.createdAt).toLocaleString()}</td>
-                                                        <td className="p-4 font-medium text-foreground">{task.workParticulars}</td>
-                                                        <td className="p-4 text-foreground">{task.contractor?.name || 'Unknown'}</td>
-                                                        <td className="p-4 text-muted-foreground">{format(new Date(task.plannedStartDate), "PPP")}</td>
-                                                        <td className="p-4 text-muted-foreground">{format(new Date(task.plannedFinishDate), "PPP")}</td>
-                                                        <td className="p-4 text-foreground">{task.duration}</td>
+                                                        <td className="p-4 text-muted-foreground whitespace-nowrap">
+                                                            {task.createdAt ? format(new Date(task.createdAt), 'dd/MM/yyyy hh:mm a') : '—'}
+                                                        </td>
+                                                        <td className="p-4 text-foreground">{task.workParticulars || '—'}</td>
+                                                        <td className="p-4 text-foreground">{task.contractor?.name || '—'}</td>
+                                                        <td className="p-4 text-muted-foreground whitespace-nowrap">
+                                                            {task.plannedStartDate ? format(new Date(task.plannedStartDate), 'dd/MM/yyyy') : '—'}
+                                                        </td>
+                                                        <td className="p-4 text-muted-foreground whitespace-nowrap">
+                                                            {task.plannedFinishDate ? format(new Date(task.plannedFinishDate), 'dd/MM/yyyy') : '—'}
+                                                        </td>
+                                                        <td className="p-4 font-medium">{task.duration ? `${task.duration} Days` : '—'}</td>
                                                         <td className="p-4">
                                                             <Select
                                                                 defaultValue={task.status}
                                                                 onValueChange={(value) => handleStatusChange(task._id, value)}
                                                             >
                                                                 <SelectTrigger className={`w-[130px] h-8 text-xs ${task.status === 'Completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                                                                        task.status === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                                                            'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                                                                    task.status === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                                                        'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                                                                     }`}>
                                                                     <SelectValue />
                                                                 </SelectTrigger>
@@ -206,6 +226,15 @@ const TaskDashboard = () => {
                     </motion.div>
                 </div>
             </main>
+
+            {/* Delete Confirmation */}
+            <ConfirmModal
+                isOpen={!!taskToDelete}
+                onClose={() => setTaskToDelete(null)}
+                onConfirm={confirmDeleteTask}
+                title="Delete Task?"
+                message="Are you sure you want to delete this task? This action cannot be undone."
+            />
         </div>
     );
 };

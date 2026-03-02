@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Plus, RefreshCw, Users, Pencil, Trash2, FileText, ClipboardCheck, BarChart3, LineChart, Menu, X, Calendar as CalendarIcon, LogOut, Eye, Sheet, File, ShoppingCart, FileCheck } from "lucide-react";
+import { ArrowLeft, Plus, RefreshCw, Users, Pencil, Trash2, FileText, ClipboardCheck, BarChart3, LineChart, Menu, X, Calendar as CalendarIcon, LogOut, Eye, Sheet, File, ShoppingCart, FileCheck, Download } from "lucide-react";
 import BackgroundOrbs from "@/components/BackgroundOrbs";
 import PreviousEntries from "@/components/PreviousEntries";
 import WorkOrderForm from "@/components/WorkOrderForm";
@@ -21,6 +21,7 @@ import MasterTracking from "@/components/MasterTracking";
 import TaskForm from "@/components/TaskForm";
 import IndentForm from "@/components/IndentForm";
 import indentService, { getIndents } from "@/services/indentService";
+import { generateTaskPDF } from "@/utils/taskPdfExport";
 import PurchaseOrderForm from "@/components/PurchaseOrderForm";
 import PurchaseOrdersList from "@/components/PurchaseOrdersList";
 import purchaseOrderService from "@/services/purchaseOrderService";
@@ -48,6 +49,7 @@ import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/context/AuthContext";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -55,6 +57,7 @@ const AdminDashboard = () => {
   const isAdmin = user?.role === 'admin';
   const isSiteEngineer = user?.role === 'engineer';
   const isTaskManager = user?.role === 'admin' || user?.role === 'project_manager';
+  const isPurchaseManager = user?.role === 'purchase_manager';
   const canChangePurchaseOrderStatus = user?.role === 'admin' || user?.role === 'project_manager' || user?.role === 'purchase_manager';
   const panelTitle =
     user?.role === 'admin' ? 'Admin' :
@@ -71,6 +74,7 @@ const AdminDashboard = () => {
   const [showWorkCompletionForm, setShowWorkCompletionForm] = useState(false);
   const [editingWorkCompletion, setEditingWorkCompletion] = useState(null);
   const [workCompletionToDelete, setWorkCompletionToDelete] = useState(null);
+  const [certificationSourceWorkOrder, setCertificationSourceWorkOrder] = useState(null);
   const [showDeploymentForm, setShowDeploymentForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [entryToDelete, setEntryToDelete] = useState(null);
@@ -82,6 +86,7 @@ const AdminDashboard = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newContractorName, setNewContractorName] = useState("");
   const [editingContractor, setEditingContractor] = useState(null);
+  const [contractorToDelete, setContractorToDelete] = useState(null);
 
   const [isIndentViewOpen, setIsIndentViewOpen] = useState(false);
   const [selectedIndent, setSelectedIndent] = useState(null);
@@ -98,6 +103,7 @@ const AdminDashboard = () => {
   const [editingPurchaseOrder, setEditingPurchaseOrder] = useState(null);
   const [purchaseOrderSearch, setPurchaseOrderSearch] = useState('');
   const [purchaseOrderFilterStatus, setPurchaseOrderFilterStatus] = useState('all');
+  const [highlightedVerificationPoId, setHighlightedVerificationPoId] = useState(null);
 
   const [taskSearch, setTaskSearch] = useState('');
   const [taskFilterStatus, setTaskFilterStatus] = useState('all');
@@ -113,7 +119,11 @@ const AdminDashboard = () => {
   const [activeLookupTab, setActiveLookupTab] = useState('siteName');
   const [isLookupDialogOpen, setIsLookupDialogOpen] = useState(false);
   const [newLookupValue, setNewLookupValue] = useState("");
+  const [newVendorAddress, setNewVendorAddress] = useState("");
+  const [newVendorGst, setNewVendorGst] = useState("");
+  const [newVendorContactNo, setNewVendorContactNo] = useState("");
   const [editingLookup, setEditingLookup] = useState(null);
+  const [lookupToDelete, setLookupToDelete] = useState(null);
 
   // Date filter for Daily Progress
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -139,7 +149,7 @@ const AdminDashboard = () => {
     queryFn: entryService.getAll,
   });
 
-  const { data: tasks = [] } = useQuery({
+  const { data: tasks = [], isLoading: isTasksLoading, isError: isTasksError } = useQuery({
     queryKey: ['tasks'],
     queryFn: () => getTasks()
   });
@@ -169,6 +179,11 @@ const AdminDashboard = () => {
     queryFn: () => siteLookupService.getSiteLookups('materialGroup')
   });
 
+  const { data: vendors = [] } = useQuery({
+    queryKey: ['siteLookups', 'vendor'],
+    queryFn: () => siteLookupService.getSiteLookups('vendor')
+  });
+
   // Global loading state
   const isRefreshing = useIsFetching() > 0;
   const lastUpdate = new Date().toLocaleTimeString();
@@ -178,6 +193,7 @@ const AdminDashboard = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success('Task deleted successfully');
+      setTaskToDelete(null);
     },
     onError: () => toast.error('Failed to delete task'),
   });
@@ -282,24 +298,30 @@ const AdminDashboard = () => {
 
   // Site Lookup Mutations
   const createLookupMutation = useMutation({
-    mutationFn: ({ type, value }) => siteLookupService.createSiteLookup(type, value),
+    mutationFn: ({ type, value, vendorAddress, vendorGst, vendorContactNo }) => siteLookupService.createSiteLookup(type, value, vendorAddress, vendorGst, vendorContactNo),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['siteLookups', variables.type] });
       toast.success("Item added successfully");
       setIsLookupDialogOpen(false);
       setNewLookupValue("");
+      setNewVendorAddress("");
+      setNewVendorGst("");
+      setNewVendorContactNo("");
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to add item')
   });
 
   const updateLookupMutation = useMutation({
-    mutationFn: ({ id, value, type }) => siteLookupService.updateSiteLookup(id, value),
+    mutationFn: ({ id, value, vendorAddress, vendorGst, vendorContactNo }) => siteLookupService.updateSiteLookup(id, value, vendorAddress, vendorGst, vendorContactNo),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['siteLookups', variables.type] });
       toast.success("Item updated successfully");
       setIsLookupDialogOpen(false);
       setEditingLookup(null);
       setNewLookupValue("");
+      setNewVendorAddress("");
+      setNewVendorGst("");
+      setNewVendorContactNo("");
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to update item')
   });
@@ -357,8 +379,13 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteContractor = (id) => {
-    if (window.confirm("Are you sure you want to delete this contractor?")) {
-      deleteContractorMutation.mutate(id);
+    setContractorToDelete(id);
+  };
+
+  const executeDeleteContractor = async () => {
+    if (contractorToDelete) {
+      deleteContractorMutation.mutate(contractorToDelete);
+      setContractorToDelete(null); // will clear via mutation but to be safe
     }
   };
 
@@ -373,21 +400,42 @@ const AdminDashboard = () => {
     if (!newLookupValue.trim()) return toast.error("Please enter a value");
 
     if (editingLookup) {
-      updateLookupMutation.mutate({ id: editingLookup._id, value: newLookupValue, type: activeLookupTab });
+      updateLookupMutation.mutate({
+        id: editingLookup._id,
+        value: newLookupValue,
+        vendorAddress: newVendorAddress,
+        vendorGst: newVendorGst,
+        vendorContactNo: newVendorContactNo,
+        type: activeLookupTab
+      });
     } else {
-      createLookupMutation.mutate({ type: activeLookupTab, value: newLookupValue });
+      createLookupMutation.mutate({
+        type: activeLookupTab,
+        value: newLookupValue,
+        vendorAddress: newVendorAddress,
+        vendorGst: newVendorGst,
+        vendorContactNo: newVendorContactNo
+      });
     }
   };
 
   const handleEditLookup = (lookup) => {
     setEditingLookup(lookup);
     setNewLookupValue(lookup.value);
+    setNewVendorAddress(lookup.vendorAddress || "");
+    setNewVendorGst(lookup.vendorGst || "");
+    setNewVendorContactNo(lookup.vendorContactNo || "");
     setIsLookupDialogOpen(true);
   };
 
   const handleDeleteLookup = (lookup) => {
-    if (window.confirm("Are you sure you want to delete this item?")) {
-      deleteLookupMutation.mutate({ id: lookup._id, type: activeLookupTab });
+    setLookupToDelete(lookup);
+  };
+
+  const executeDeleteLookup = async () => {
+    if (lookupToDelete) {
+      deleteLookupMutation.mutate({ id: lookupToDelete._id, type: activeLookupTab });
+      setLookupToDelete(null);
     }
   };
 
@@ -484,10 +532,10 @@ const AdminDashboard = () => {
           {isAdmin && (
             <>
               <SidebarLink id="contractors" label="Contractors" icon={Users} />
-              <SidebarLink id="site-lookups" label="Site Lookups" icon={FileText} />
               <SidebarLink id="users" label="User Management" icon={Users} />
             </>
           )}
+          <SidebarLink id="site-lookups" label="Site Lookups" icon={FileText} />
         </nav>
 
         <div className="p-4 border-t border-white/10">
@@ -549,19 +597,22 @@ const AdminDashboard = () => {
                 {isAdmin && (
                   <>
                     <SidebarLink id="contractors" label="Contractors" icon={Users} />
-                    <SidebarLink id="site-lookups" label="Site Lookups" icon={FileText} />
                     <SidebarLink id="users" label="User Management" icon={Users} />
                   </>
                 )}
+                <SidebarLink id="site-lookups" label="Site Lookups" icon={FileText} />
               </nav>
 
               <div className="p-4 border-t border-white/10">
                 <button
-                  onClick={() => navigate("/")}
+                  onClick={() => {
+                    logout();
+                    navigate("/login");
+                  }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors"
                 >
-                  <ArrowLeft className="w-5 h-5" />
-                  <span className="font-medium">Exit Dashboard</span>
+                  <LogOut className="w-5 h-5" />
+                  <span className="font-medium">Logout</span>
                 </button>
               </div>
             </motion.aside>
@@ -614,17 +665,24 @@ const AdminDashboard = () => {
               </Button>
             )}
 
-            {activeTab === 'site-lookups' && isAdmin && (
-              <Button onClick={() => { setNewLookupValue(''); setEditingLookup(null); setIsLookupDialogOpen(true); }} size="sm" className="gap-2 text-xs md:text-sm">
+            {activeTab === 'site-lookups' && (
+              <Button onClick={() => {
+                setNewLookupValue('');
+                setNewVendorAddress('');
+                setNewVendorGst('');
+                setNewVendorContactNo('');
+                setEditingLookup(null);
+                setIsLookupDialogOpen(true);
+              }} size="sm" className="gap-2 text-xs md:text-sm">
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">
-                  Add {activeLookupTab === 'siteName' ? 'Site' : activeLookupTab === 'siteEngineer' ? 'Engineer' : 'Material'}
+                  Add {activeLookupTab === 'siteName' ? 'Site' : activeLookupTab === 'siteEngineer' ? 'Engineer' : activeLookupTab === 'vendor' ? 'Vendor' : 'Material'}
                 </span>
                 <span className="sm:hidden">Add</span>
               </Button>
             )}
 
-            {activeTab === 'tasks' && !showTaskForm && isTaskManager && (
+            {activeTab === 'tasks' && !showTaskForm && (
               <Button onClick={() => setShowTaskForm(true)} size="sm" className="gap-2 text-xs md:text-sm">
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">Assign New Task</span>
@@ -655,6 +713,17 @@ const AdminDashboard = () => {
               }} size="sm" className="gap-2 text-xs md:text-sm">
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">Create Work Order</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+            )}
+
+            {activeTab === 'certification' && !showWorkCompletionForm && (
+              <Button onClick={() => {
+                setEditingWorkCompletion(null);
+                setShowWorkCompletionForm(true);
+              }} size="sm" className="gap-2 text-xs md:text-sm">
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">New Certification</span>
                 <span className="sm:hidden">New</span>
               </Button>
             )}
@@ -752,6 +821,12 @@ const AdminDashboard = () => {
                     setEditingWorkOrder(null);
                     setShowWorkOrderForm(true);
                   }}
+                  onCreateCertification={(order) => {
+                    setEditingWorkCompletion(null);
+                    setCertificationSourceWorkOrder(order);
+                    setShowWorkCompletionForm(true);
+                    setActiveTab('certification');
+                  }}
                 />
               )}
             </motion.div>
@@ -770,13 +845,16 @@ const AdminDashboard = () => {
                     <Button variant="ghost" onClick={() => {
                       setShowWorkCompletionForm(false);
                       setEditingWorkCompletion(null);
+                      setCertificationSourceWorkOrder(null);
                     }}>Cancel</Button>
                   </div>
                   <WorkCompletionForm
                     initialData={editingWorkCompletion}
+                    sourceWorkOrder={certificationSourceWorkOrder}
                     onSuccess={() => {
                       setShowWorkCompletionForm(false);
                       setEditingWorkCompletion(null);
+                      setCertificationSourceWorkOrder(null);
                       queryClient.invalidateQueries({ queryKey: ['workCompletions'] });
                     }}
                   />
@@ -791,6 +869,10 @@ const AdminDashboard = () => {
                     setShowWorkCompletionForm(true);
                   }}
                   onDelete={handleDeleteWorkCompletion}
+                  onCreateNew={() => {
+                    setEditingWorkCompletion(null);
+                    setShowWorkCompletionForm(true);
+                  }}
                 />
               )}
             </motion.div>
@@ -823,7 +905,7 @@ const AdminDashboard = () => {
                             className={`w-full sm:w-[240px] justify-start text-left font-normal ${!selectedDate && "text-muted-foreground"}`}
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+                            {selectedDate ? format(selectedDate, "dd/MM/yyyy") : <span>Pick a date</span>}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="end">
@@ -942,7 +1024,7 @@ const AdminDashboard = () => {
               <div className="glass-card p-6 md:p-8">
                 <div className="mb-6">
                   <h3 className="text-xl md:text-2xl font-bold text-foreground">Material Consumption</h3>
-                  <p className="text-muted-foreground text-sm">Total materials used {selectedDate ? `on ${format(selectedDate, "PPP")}` : "across all projects"}</p>
+                  <p className="text-muted-foreground text-sm">Total materials used {selectedDate ? `on ${format(selectedDate, "dd/MM/yyyy")}` : "across all projects"}</p>
                 </div>
 
                 <div className="border rounded-xl border-white/10 overflow-hidden overflow-x-auto">
@@ -1033,7 +1115,7 @@ const AdminDashboard = () => {
                 // Indent Form view
                 <div className="glass-card shadow-lg p-6 md:p-8 rounded-xl relative overflow-hidden">
                   <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
-                    <h3 className="text-lg font-semibold">{editingIndent ? "Edit Indent" : "New Indent / Site Requirement"}</h3>
+                    <h3 className="text-lg font-semibold">{(editingIndent && editingIndent._id) ? "Edit Indent" : "New Indent / Site Requirement"}</h3>
                     <Button variant="ghost" size="sm" onClick={() => {
                       setShowIndentForm(false);
                       setEditingIndent(null);
@@ -1106,6 +1188,7 @@ const AdminDashboard = () => {
                         <tr>
                           <th className="p-4 whitespace-nowrap">Task Ref</th>
                           <th className="p-4 whitespace-nowrap">Indent No.</th>
+                          <th className="p-4 whitespace-nowrap">Created By</th>
                           <th className="p-4 whitespace-nowrap">Date</th>
                           <th className="p-4 whitespace-nowrap">Site Name</th>
                           <th className="p-4 whitespace-nowrap">Site Engineer</th>
@@ -1125,7 +1208,7 @@ const AdminDashboard = () => {
                             const matchStatus = indentFilterStatus === 'all' || (indentFilterStatus === 'verified' ? indent.verifiedByPurchaseManager : !indent.verifiedByPurchaseManager);
                             return matchSearch && matchPriority && matchStatus;
                           });
-                          if (filtered.length === 0) return <tr><td colSpan="9" className="p-8 text-center text-muted-foreground">{indents.length === 0 ? 'No indents submitted yet.' : 'No indents match your search or filter.'}</td></tr>;
+                          if (filtered.length === 0) return <tr><td colSpan="10" className="p-8 text-center text-muted-foreground">{indents.length === 0 ? 'No indents submitted yet.' : 'No indents match your search or filter.'}</td></tr>;
                           return filtered.map((indent) => (
                             <tr key={indent._id} className="hover:bg-white/5 transition-colors">
                               <td className="p-4">
@@ -1138,7 +1221,8 @@ const AdminDashboard = () => {
                                 )}
                               </td>
                               <td className="p-4 font-mono text-foreground">{indent.indentNumber}</td>
-                              <td className="p-4 text-muted-foreground">{format(new Date(indent.date), 'PPP')}</td>
+                              <td className="p-4 text-foreground">{indent.createdBy?.fullName || indent.createdBy?.email || 'Unknown'}</td>
+                              <td className="p-4 text-muted-foreground">{format(new Date(indent.createdAt || indent.date), 'dd/MM/yyyy hh:mm a')}</td>
                               <td className="p-4 text-foreground">{indent.siteName}</td>
                               <td className="p-4 text-foreground">{indent.siteEngineerName}</td>
                               <td className="p-4 text-foreground">{indent.materialGroup}</td>
@@ -1154,12 +1238,17 @@ const AdminDashboard = () => {
                               <td className="p-4 text-foreground">{indent.items?.length || 0} items</td>
                               <td className="p-4 text-center">
                                 {indent.verifiedByPurchaseManager ? (
-                                  <span className="px-2 py-1 flex items-center gap-1.5 rounded-md text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
-                                    <ClipboardCheck className="w-3 h-3" /> Verified
+                                  <span className="px-2 py-1 flex items-center justify-center gap-1.5 rounded-md text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20" title={indent.verifiedBy?.fullName || "Verified"}>
+                                    <ClipboardCheck className="w-3 h-3" />
+                                    {indent.verifiedBy?.fullName || indent.verifiedBy?.email ? (
+                                      <span className="truncate max-w-[100px]">{indent.verifiedBy.fullName || indent.verifiedBy.email}</span>
+                                    ) : (
+                                      "Verified"
+                                    )}
                                   </span>
                                 ) : (
-                                  <span className="px-2 py-1 flex items-center gap-1.5 rounded-md text-xs font-medium bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
-                                    Pending Validation
+                                  <span className="px-2 py-1 flex items-center justify-center gap-1.5 rounded-md text-xs font-medium bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
+                                    Pending
                                   </span>
                                 )}
                               </td>
@@ -1176,20 +1265,54 @@ const AdminDashboard = () => {
                                     <Eye className="w-4 h-4" />
                                   </button>
                                   {(user?.role === 'admin' || user?.role === 'purchase_manager') && (
-                                    <button
-                                      onClick={() => {
-                                        setVerifyingIndent(indent);
-                                        setVerifyFormData({
-                                          verifiedByPurchaseManager: indent.verifiedByPurchaseManager || false,
-                                          verifiedPdf: null
-                                        });
-                                        setIsVerifyIndentOpen(true);
-                                      }}
-                                      className="p-1.5 hover:bg-white/20 rounded-lg text-green-400 transition-colors"
-                                      title="Verify Indent"
-                                    >
-                                      <ClipboardCheck className="w-4 h-4" />
-                                    </button>
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setVerifyingIndent(indent);
+                                          setVerifyFormData({
+                                            verifiedByPurchaseManager: indent.verifiedByPurchaseManager || false,
+                                            verifiedPdf: null
+                                          });
+                                          setIsVerifyIndentOpen(true);
+                                        }}
+                                        className="p-1.5 hover:bg-white/20 rounded-lg text-green-400 transition-colors"
+                                        title="Verify Indent"
+                                      >
+                                        <ClipboardCheck className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          // Set active tab to purchase-order
+                                          setActiveTab('purchase-order');
+                                          // Set editing purchase order data
+                                          setEditingPurchaseOrder({
+                                            indentReference: indent,
+                                            taskReference: indent.taskReference || "",
+                                            shipToAddress: indent.siteName || "",
+                                            shipToContactPerson: indent.siteEngineerName || "",
+                                            items: indent.items?.map(item => ({
+                                              materialDescription: item.description || item.materialDescription || "",
+                                              unit: item.unit || "",
+                                              quantity: item.orderQuantity || item.requiredQuantity || item.approvedQuantity || item.quantity || "",
+                                              rate: "",
+                                              baseAmount: 0,
+                                              taxRate: "18",
+                                              taxAmount: 0,
+                                              amount: 0
+                                            })) || []
+                                          });
+                                          // Open PO form after a small delay to ensure the tab has rendered
+                                          setTimeout(() => {
+                                            setShowPurchaseOrderForm(true);
+                                          }, 50);
+                                        }}
+                                        className="p-1.5 flex items-center gap-1 hover:bg-white/20 rounded-lg text-emerald-400 transition-colors bg-emerald-500/10 border border-emerald-500/20 px-2 ml-1"
+                                        title="Create Purchase Order"
+                                      >
+                                        <ShoppingCart className="w-3.5 h-3.5" />
+                                        <span className="text-xs font-medium">PO</span>
+                                      </button>
+                                    </>
                                   )}
                                   {isAdmin && (
                                     <button
@@ -1232,7 +1355,7 @@ const AdminDashboard = () => {
                 // Form view
                 <div className="glass-card shadow-lg p-6 md:p-8 rounded-xl relative overflow-hidden">
                   <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
-                    <h3 className="text-lg font-semibold">{editingPurchaseOrder ? "Edit Purchase Order" : "New Purchase Order"}</h3>
+                    <h3 className="text-lg font-semibold">{editingPurchaseOrder?._id ? "Edit Purchase Order" : "New Purchase Order"}</h3>
                     <Button variant="ghost" size="sm" onClick={() => {
                       setShowPurchaseOrderForm(false);
                       setEditingPurchaseOrder(null);
@@ -1301,6 +1424,10 @@ const AdminDashboard = () => {
                     onDelete={(id) => {
                       deletePurchaseOrderMutation.mutate(id);
                     }}
+                    onNavigateToVerification={(id) => {
+                      setActiveTab('material-verification');
+                      setHighlightedVerificationPoId(id);
+                    }}
                   />
                 </div>
               )}
@@ -1356,6 +1483,8 @@ const AdminDashboard = () => {
                   onVerificationSuccess={() => {
                     queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
                   }}
+                  highlightedPoId={highlightedVerificationPoId}
+                  onClearHighlight={() => setHighlightedVerificationPoId(null)}
                 />
               </div>
             </motion.div>
@@ -1389,6 +1518,34 @@ const AdminDashboard = () => {
                       <p className="text-muted-foreground text-sm mt-0.5">All assigned project tasks and their status</p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                      <Button
+                        onClick={() => {
+                          try {
+                            const exportedTasks = tasks.filter(t => {
+                              const matchSearch = t.taskId?.toLowerCase().includes(taskSearch.toLowerCase()) ||
+                                t.workParticulars?.toLowerCase().includes(taskSearch.toLowerCase()) ||
+                                t.contractorName?.toLowerCase().includes(taskSearch.toLowerCase());
+                              const matchStatus = taskFilterStatus === 'all' || t.status === taskFilterStatus;
+                              return matchSearch && matchStatus;
+                            });
+
+                            if (exportedTasks.length === 0) {
+                              toast.error("No tasks found to export with current filters.");
+                              return;
+                            }
+                            generateTaskPDF(exportedTasks);
+                          } catch (error) {
+                            console.error("PDF Export Error: ", error);
+                            toast.error("Failed to generate PDF");
+                          }
+                        }}
+                        size="sm"
+                        variant="outline"
+                        className="gap-2 text-xs"
+                      >
+                        <Download className="w-4 h-4" />
+                        Export PDF
+                      </Button>
                       <div className="relative">
                         <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
                         <input type="text" placeholder="Search task ID, work, contractor…" value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} className="pl-8 pr-3 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-full sm:w-52" />
@@ -1409,7 +1566,7 @@ const AdminDashboard = () => {
                           <th className="p-4 whitespace-nowrap">Task ID</th>
                           <th className="p-4 whitespace-nowrap">Timestamp</th>
                           <th className="p-4 whitespace-nowrap">Work Particulars</th>
-                          <th className="p-4 whitespace-nowrap">Contractor</th>
+                          <th className="p-4 whitespace-nowrap">Assigned To (Contractor)</th>
                           <th className="p-4 whitespace-nowrap">Planned Start</th>
                           <th className="p-4 whitespace-nowrap">Planned Finish</th>
                           <th className="p-4 whitespace-nowrap">Duration</th>
@@ -1420,9 +1577,23 @@ const AdminDashboard = () => {
                       </thead>
                       <tbody className="divide-y divide-white/10">
                         {(() => {
+                          if (isTasksLoading) return (
+                            <tr>
+                              <td colSpan="10" className="p-8 text-center text-muted-foreground">
+                                Loading tasks…
+                              </td>
+                            </tr>
+                          );
+                          if (isTasksError) return (
+                            <tr>
+                              <td colSpan="10" className="p-8 text-center text-red-400">
+                                Failed to load tasks. Please refresh.
+                              </td>
+                            </tr>
+                          );
                           const q = taskSearch.toLowerCase();
                           const filtered = tasks.filter(task => {
-                            const matchSearch = !q || task.taskId?.toLowerCase().includes(q) || task.workParticulars?.toLowerCase().includes(q) || task.contractor?.name?.toLowerCase().includes(q) || task.projectManager?.fullName?.toLowerCase().includes(q);
+                            const matchSearch = !q || task.taskId?.toLowerCase().includes(q) || task.workParticulars?.toLowerCase().includes(q) || task.contractor?.name?.toLowerCase().includes(q) || task.contractorName?.toLowerCase().includes(q) || task.projectManager?.fullName?.toLowerCase().includes(q);
                             const matchStatus = taskFilterStatus === 'all' || task.status === taskFilterStatus;
                             return matchSearch && matchStatus;
                           });
@@ -1440,12 +1611,18 @@ const AdminDashboard = () => {
                                   {task.taskId || '—'}
                                 </span>
                               </td>
-                              <td className="p-4 text-muted-foreground">{new Date(task.createdAt).toLocaleString()}</td>
-                              <td className="p-4 font-medium text-foreground">{task.workParticulars}</td>
-                              <td className="p-4 text-foreground">{task.contractor?.name || 'Unknown'}</td>
-                              <td className="p-4 text-muted-foreground">{format(new Date(task.plannedStartDate), 'PPP')}</td>
-                              <td className="p-4 text-muted-foreground">{format(new Date(task.plannedFinishDate), 'PPP')}</td>
-                              <td className="p-4 text-foreground">{task.duration}</td>
+                              <td className="p-4 text-muted-foreground whitespace-nowrap">
+                                {task.createdAt ? format(new Date(task.createdAt), 'dd/MM/yyyy hh:mm a') : '—'}
+                              </td>
+                              <td className="p-4 font-medium text-foreground">{task.workParticulars || '—'}</td>
+                              <td className="p-4 text-foreground">{task.contractor?.name || task.contractorName || 'Unknown'}</td>
+                              <td className="p-4 text-muted-foreground whitespace-nowrap">
+                                {task.plannedStartDate ? format(new Date(task.plannedStartDate), 'dd/MM/yyyy') : '—'}
+                              </td>
+                              <td className="p-4 text-muted-foreground whitespace-nowrap">
+                                {task.plannedFinishDate ? format(new Date(task.plannedFinishDate), 'dd/MM/yyyy') : '—'}
+                              </td>
+                              <td className="p-4 text-foreground">{task.duration || '—'}</td>
                               <td className="p-4 text-foreground">{task.projectManager?.fullName || task.projectManager?.email || 'Unknown'}</td>
                               <td className="p-4">
                                 {isTaskManager ? (
@@ -1477,34 +1654,48 @@ const AdminDashboard = () => {
                                 )}
                               </td>
                               <td className="p-4">
-                                {isAdmin && (
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => {
-                                        setEditingTask(task);
-                                        setEditTaskForm({
-                                          workParticulars: task.workParticulars,
-                                          contractor: task.contractor?._id || '',
-                                          plannedStartDate: task.plannedStartDate?.slice(0, 10) || '',
-                                          plannedFinishDate: task.plannedFinishDate?.slice(0, 10) || '',
-                                          duration: task.duration,
-                                          status: task.status,
-                                        });
-                                      }}
-                                      className="p-1.5 hover:bg-white/20 rounded-lg text-blue-400 transition-colors"
-                                      title="Edit Task"
-                                    >
-                                      <Pencil className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      onClick={() => setTaskToDelete(task)}
-                                      className="p-1.5 hover:bg-red-500/20 rounded-lg text-red-400 transition-colors"
-                                      title="Delete Task"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  </div>
-                                )}
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => {
+                                      setActiveTab('indent');
+                                      setShowIndentForm(true);
+                                      setEditingIndent({ taskReference: task.taskId || task._id });
+                                    }}
+                                    className="p-1.5 flex items-center gap-1 hover:bg-white/20 rounded-lg text-emerald-400 transition-colors bg-emerald-500/10 border border-emerald-500/20 px-2"
+                                    title="Create Indent"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    <span className="text-xs font-medium">Indent</span>
+                                  </button>
+                                  {isAdmin && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setEditingTask(task);
+                                          setEditTaskForm({
+                                            workParticulars: task.workParticulars,
+                                            contractorInput: task.contractor?.name || task.contractorName || '',
+                                            plannedStartDate: task.plannedStartDate?.slice(0, 10) || '',
+                                            plannedFinishDate: task.plannedFinishDate?.slice(0, 10) || '',
+                                            duration: task.duration,
+                                            status: task.status,
+                                          });
+                                        }}
+                                        className="p-1.5 hover:bg-white/20 rounded-lg text-blue-400 transition-colors"
+                                        title="Edit Task"
+                                      >
+                                        <Pencil className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => setTaskToDelete(task)}
+                                        className="p-1.5 hover:bg-red-500/20 rounded-lg text-red-400 transition-colors"
+                                        title="Delete Task"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ));
@@ -1536,7 +1727,7 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
-          {activeTab === 'site-lookups' && isAdmin && (
+          {activeTab === 'site-lookups' && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1567,6 +1758,12 @@ const AdminDashboard = () => {
                     >
                       Materials
                     </button>
+                    <button
+                      onClick={() => setActiveLookupTab('vendor')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeLookupTab === 'vendor' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                      Vendors
+                    </button>
                   </div>
                 </div>
                 <div className="p-6">
@@ -1579,12 +1776,12 @@ const AdminDashboard = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/10">
-                        {(activeLookupTab === 'siteName' ? siteNames : activeLookupTab === 'siteEngineer' ? siteEngineers : materialGroups).length === 0 ? (
+                        {(activeLookupTab === 'siteName' ? siteNames : activeLookupTab === 'siteEngineer' ? siteEngineers : activeLookupTab === 'vendor' ? vendors : materialGroups).length === 0 ? (
                           <tr>
                             <td colSpan="2" className="p-8 text-center text-muted-foreground">No items found.</td>
                           </tr>
                         ) : (
-                          (activeLookupTab === 'siteName' ? siteNames : activeLookupTab === 'siteEngineer' ? siteEngineers : materialGroups).map((item) => (
+                          (activeLookupTab === 'siteName' ? siteNames : activeLookupTab === 'siteEngineer' ? siteEngineers : activeLookupTab === 'vendor' ? vendors : materialGroups).map((item) => (
                             <tr key={item._id} className="hover:bg-white/5 transition-colors group">
                               <td className="p-4 text-foreground font-medium">{item.value}</td>
                               <td className="p-4 text-right">
@@ -1710,24 +1907,56 @@ const AdminDashboard = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editingLookup ? 'Edit' : 'Add'} {activeLookupTab === 'siteName' ? 'Site Name' : activeLookupTab === 'siteEngineer' ? 'Site Engineer' : 'Material Group'}
+              {editingLookup ? 'Edit' : 'Add'} {activeLookupTab === 'siteName' ? 'Site Name' : activeLookupTab === 'siteEngineer' ? 'Site Engineer' : activeLookupTab === 'vendor' ? 'Vendor' : 'Material Group'}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleLookupSubmit} className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Value</label>
+              <label className="text-sm font-medium text-muted-foreground">
+                {activeLookupTab === 'vendor' ? 'Vendor Name' : 'Value'}
+              </label>
               <Input
                 autoFocus
                 value={newLookupValue}
                 onChange={(e) => setNewLookupValue(e.target.value)}
-                placeholder="Enter value..."
+                placeholder={activeLookupTab === 'siteName' ? "e.g., 'Site A'" : activeLookupTab === 'siteEngineer' ? "Name" : activeLookupTab === 'vendor' ? "Vendor Name" : "Material"}
               />
             </div>
+
+            {activeLookupTab === 'vendor' && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Vendor Address</label>
+                  <Input
+                    value={newVendorAddress}
+                    onChange={(e) => setNewVendorAddress(e.target.value)}
+                    placeholder="Address"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Vendor GST No.</label>
+                  <Input
+                    value={newVendorGst}
+                    onChange={(e) => setNewVendorGst(e.target.value)}
+                    placeholder="GST Number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Vendor Contact No.</label>
+                  <Input
+                    value={newVendorContactNo}
+                    onChange={(e) => setNewVendorContactNo(e.target.value)}
+                    placeholder="Contact Number"
+                  />
+                </div>
+              </>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsLookupDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createLookupMutation.isPending || updateLookupMutation.isPending}>
+              <Button type="submit" disabled={!newLookupValue.trim() || createLookupMutation.isPending || updateLookupMutation.isPending}>
                 {createLookupMutation.isPending || updateLookupMutation.isPending ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>
@@ -1755,16 +1984,25 @@ const AdminDashboard = () => {
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium text-muted-foreground">Contractor</label>
-              <select
-                value={editTaskForm.contractor || ''}
-                onChange={(e) => setEditTaskForm(p => ({ ...p, contractor: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50 text-sm"
-              >
-                <option value="">Select contractor</option>
-                {contractors.map(c => (
-                  <option key={c._id} value={c._id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <Input
+                  list="edit-contractor-suggestions"
+                  value={editTaskForm.contractorInput || ''}
+                  onChange={(e) => setEditTaskForm(p => ({ ...p, contractorInput: e.target.value }))}
+                  placeholder="Type or select contractor"
+                  autoComplete="off"
+                />
+                <datalist id="edit-contractor-suggestions">
+                  {contractors.map(c => (
+                    <option key={c._id} value={c.name} />
+                  ))}
+                </datalist>
+              </div>
+              {editTaskForm.contractorInput?.trim() && !contractors.find(c => c.name.toLowerCase() === editTaskForm.contractorInput.trim().toLowerCase()) && (
+                <p className="text-[11px] text-amber-400/80 mt-1">
+                  ⚠ New contractor — will be saved as free text
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -1833,8 +2071,19 @@ const AdminDashboard = () => {
             <Button
               disabled={updateTaskMutation.isPending}
               onClick={() => {
+                // Match contractorInput against existing contractors
+                const trimmed = (editTaskForm.contractorInput || '').trim();
+                const matched = contractors.find(c => c.name.toLowerCase() === trimmed.toLowerCase());
+
+                const payload = {
+                  ...editTaskForm,
+                  contractor: matched?._id || null, // send null if not matched so it unsets old ref
+                  contractorName: trimmed,
+                };
+                delete payload.contractorInput; // remove the UI-only field
+
                 updateTaskMutation.mutate(
-                  { id: editingTask._id, ...editTaskForm },
+                  { id: editingTask._id, ...payload },
                   { onSuccess: () => setEditingTask(null), onError: () => setEditingTask(null) }
                 );
               }}
@@ -2180,6 +2429,22 @@ const AdminDashboard = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Modern Confirm Modals for Actions */}
+      <ConfirmModal
+        isOpen={!!contractorToDelete}
+        onClose={() => setContractorToDelete(null)}
+        onConfirm={executeDeleteContractor}
+        title="Delete Contractor?"
+        message="Are you sure you want to delete this contractor? This action cannot be undone."
+      />
+
+      <ConfirmModal
+        isOpen={!!lookupToDelete}
+        onClose={() => setLookupToDelete(null)}
+        onConfirm={executeDeleteLookup}
+        title="Delete Item?"
+        message="Are you sure you want to delete this item? This action cannot be undone."
+      />
     </div >
   );
 };

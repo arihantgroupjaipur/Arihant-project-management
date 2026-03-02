@@ -48,8 +48,7 @@ const MaterialConsumptionTable = ({ rows, onChange, readOnly = false }) => {
         const isLastRowFilled =
             lastRow.materialName !== "" &&
             (lastRow.totalQuantity !== "" && lastRow.totalQuantity >= 0) &&
-            lastRow.unit !== "" &&
-            lastRow.workOrderReference !== "";
+            lastRow.unit !== "";
 
         if (isLastRowFilled) {
             onChange([...rows, { materialName: "", totalQuantity: "", unit: "", workOrderReference: "" }]);
@@ -81,18 +80,17 @@ const MaterialConsumptionTable = ({ rows, onChange, readOnly = false }) => {
 
             <div className="glass-card overflow-hidden">
                 {/* Header */}
-                <div className="grid grid-cols-[1fr,100px,100px,1fr,40px] gap-2 p-3 bg-white/5 border-b border-white/10">
+                <div className="grid grid-cols-[2fr,150px,150px,40px] gap-2 p-3 bg-white/5 border-b border-white/10">
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Material Name</div>
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-center">Total Quantity</div>
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-center">Unit</div>
-                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Work Order Reference</div>
                     <div></div>
                 </div>
 
                 {/* Rows */}
                 <div className="divide-y divide-white/5">
                     {rows.map((row, index) => (
-                        <motion.div key={index} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className="grid grid-cols-[1fr,100px,100px,1fr,40px] gap-2 p-2 hover:bg-white/5 transition-colors group">
+                        <motion.div key={index} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className="grid grid-cols-[2fr,150px,150px,40px] gap-2 p-2 hover:bg-white/5 transition-colors group">
                             <Input
                                 type="text"
                                 placeholder="Material Name"
@@ -125,25 +123,6 @@ const MaterialConsumptionTable = ({ rows, onChange, readOnly = false }) => {
                                         {units.map((unit) => (
                                             <SelectItem key={unit} value={unit}>
                                                 {unit}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                            {readOnly ? (
-                                <Input type="text" value={row.workOrderReference} disabled className="h-9 bg-white/5 border-white/10 text-sm" />
-                            ) : (
-                                <Select
-                                    value={row.workOrderReference}
-                                    onValueChange={(value) => handleCellChange(index, "workOrderReference", value)}
-                                >
-                                    <SelectTrigger className="h-9 bg-white/5 border-white/10 text-sm">
-                                        <SelectValue placeholder="Ref WO" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {workOrders.map((wo) => (
-                                            <SelectItem key={wo._id} value={wo.workOrderNumber}>
-                                                {wo.workOrderNumber}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

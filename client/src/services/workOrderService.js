@@ -30,6 +30,25 @@ export const workOrderService = {
         const response = await api.delete(`/workorders/${id}`);
         return response.data;
     },
+
+    // Upload a PDF and attach it to the work order
+    uploadWorkOrderPdf: async (id, file) => {
+        const formData = new FormData();
+        formData.append('image', file);
+        const uploadResponse = await api.post('/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const s3Key = uploadResponse.data.key;
+        // Use the dedicated PATCH endpoint to avoid full-PUT validation issues
+        const response = await api.patch(`/workorders/${id}/pdf`, { uploadedPdf: s3Key });
+        return response.data;
+    },
+
+    // Remove an uploaded PDF from a work order
+    removeWorkOrderPdf: async (id) => {
+        const response = await api.patch(`/workorders/${id}/pdf`, { uploadedPdf: null });
+        return response.data;
+    },
 };
 
 export default workOrderService;

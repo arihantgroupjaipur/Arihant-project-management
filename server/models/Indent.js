@@ -77,6 +77,11 @@ const indentSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    verifiedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+    },
     verifiedPdfUrl: {
         type: String,
         default: '',

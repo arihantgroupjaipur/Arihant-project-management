@@ -75,6 +75,7 @@ router.post('/', authMiddleware, async (req, res) => {
         });
 
         await workOrder.save();
+        // Fire notification (non-blocking)
         res.status(201).json(workOrder);
     } catch (err) {
         console.error(err);
@@ -97,6 +98,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
             storeKeeperSupervisorName,
             workItems,
             signatures,
+            uploadedPdf,
         } = req.body;
 
         let workOrder = await WorkOrder.findById(req.params.id);
@@ -122,8 +124,30 @@ router.put('/:id', authMiddleware, async (req, res) => {
         workOrder.storeKeeperSupervisorName = storeKeeperSupervisorName;
         workOrder.workItems = workItems;
         workOrder.signatures = signatures;
+        if (uploadedPdf !== undefined) workOrder.uploadedPdf = uploadedPdf;
 
         await workOrder.save();
+        res.json(workOrder);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server Error' });
+    }
+});
+
+// @route   PATCH /api/workorders/:id/pdf
+// @desc    Attach or remove an uploaded PDF on a work order
+// @access  Private
+router.patch('/:id/pdf', authMiddleware, async (req, res) => {
+    try {
+        const { uploadedPdf } = req.body;
+        const workOrder = await WorkOrder.findByIdAndUpdate(
+            req.params.id,
+            { uploadedPdf: uploadedPdf ?? null },
+            { new: true }
+        );
+        if (!workOrder) {
+            return res.status(404).json({ message: 'Work Order not found' });
+        }
         res.json(workOrder);
     } catch (err) {
         console.error(err);

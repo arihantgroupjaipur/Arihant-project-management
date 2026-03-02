@@ -64,6 +64,7 @@ router.post('/', authMiddleware, async (req, res) => {
             contractorSignature,
             confirmationDate,
             checklistImages, // Add this
+            uploadedPdf,
         } = req.body;
 
         const workCompletion = new WorkCompletion({
@@ -87,10 +88,12 @@ router.post('/', authMiddleware, async (req, res) => {
             contractorSignature,
             confirmationDate,
             checklistImages, // Add this
+            uploadedPdf,
             createdBy: req.user.id,
         });
 
         await workCompletion.save();
+        // Fire notification (non-blocking)
         res.status(201).json(workCompletion);
     } catch (err) {
         console.error(err);
@@ -124,6 +127,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
             contractorSignature,
             confirmationDate,
             checklistImages, // Add this
+            uploadedPdf, // Add this
         } = req.body;
 
         let workCompletion = await WorkCompletion.findById(req.params.id);
@@ -156,6 +160,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
                     contractorSignature,
                     confirmationDate,
                     checklistImages,
+                    uploadedPdf,
                 }
             },
             { new: true, runValidators: false }

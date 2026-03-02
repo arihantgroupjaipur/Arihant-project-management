@@ -65,7 +65,6 @@ app.use('/api/indents', indentRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/site-lookups', siteLookupRoutes);
 app.use('/api/users', userRoutes);
-
 app.get('/', (req, res) => {
     res.send('Arihant Dream Infra Projects Limited API is running');
 });

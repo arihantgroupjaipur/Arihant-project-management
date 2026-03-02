@@ -24,4 +24,10 @@ export const entryService = {
         const response = await api.delete(`/entries/${id}`);
         return response.data;
     },
+
+    // Get historical usage of a work order
+    async getWorkOrderUsage(workOrderNo) {
+        const response = await api.get(`/entries/work-order-usage/${encodeURIComponent(workOrderNo)}`);
+        return response.data;
+    }
 };

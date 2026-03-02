@@ -17,6 +17,57 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 });
 
+// @route   GET /api/entries/work-order-usage/:workOrderNo
+// @desc    Get total historical usage of actualLabour and actualWork for a specific work order across all daily progress reports
+// @access  Private
+router.get('/work-order-usage/:workOrderNo', authMiddleware, async (req, res) => {
+    try {
+        const { workOrderNo } = req.params;
+
+        // Find all entries that have at least one report matching the workOrderNo
+        const entries = await Entry.find({ "dailyProgressReports.workOrderNo": workOrderNo });
+
+        let totalConsumedLabour = 0;
+        let totalConsumedArea = 0;
+        let consumedWorkDescriptions = [];
+
+        entries.forEach(entry => {
+            entry.dailyProgressReports.forEach(report => {
+                if (report.workOrderNo === workOrderNo) {
+                    totalConsumedLabour += (report.actualLabour || 0);
+
+                    if (report.actualWork && report.actualWork.trim() !== '') {
+                        const actualWorkStr = report.actualWork.trim();
+                        consumedWorkDescriptions.push(actualWorkStr);
+
+                        // Extract leading/floating numbers from actualWork text
+                        // E.g. "50.5 sqft" -> 50.5
+                        const parsedArea = parseFloat(actualWorkStr);
+                        if (!isNaN(parsedArea)) {
+                            totalConsumedArea += parsedArea;
+                        }
+                    }
+                }
+            });
+        });
+
+        // Optionally, compile the consumedWork into a distinct list or a joined string
+        const combinedConsumedWork = [...new Set(consumedWorkDescriptions)].join(" | ");
+
+        res.json({
+            workOrderNo,
+            totalConsumedLabour,
+            totalConsumedArea,
+            combinedConsumedWork,
+            entryCount: entries.length
+        });
+
+    } catch (err) {
+        console.error('Work order usage error:', err);
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   POST /api/entries
 // @desc    Create a new entry
 // @access  Private
@@ -24,6 +75,7 @@ router.post('/', authMiddleware, async (req, res) => {
     try {
         const newEntry = new Entry(req.body);
         const entry = await newEntry.save();
+        // Fire notification (non-blocking)
         res.json(entry);
     } catch (err) {
         console.error(err);

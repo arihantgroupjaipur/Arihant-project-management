@@ -1,14 +1,57 @@
 import { useState } from "react";
+import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, FileText, Calendar, MapPin, User, Sheet, File, Edit, Trash2 } from "lucide-react";
+import { ChevronDown, Edit, Trash2, FileText, Calendar, File, Sheet, Link as LinkIcon, Download, ClipboardCheck, Upload, Loader2, Eye, X } from "lucide-react";
 import { toast } from "sonner";
 import { generateWorkOrderPDF } from "@/utils/workOrderPdfExport";
 import { generateWorkOrderExcel } from "@/utils/workOrderExcelExport";
 import { generateWorkOrderCSV } from "@/utils/workOrderCsvExport";
+import { useNavigate } from "react-router-dom";
+import { workOrderService } from "@/services/workOrderService";
+import { uploadService } from "@/services/uploadService";
+import { useQueryClient } from "@tanstack/react-query";
 
-const WorkOrdersList = ({ workOrders, onCreateNew, isAdmin = false, onEdit, onDelete }) => {
+const WorkOrdersList = ({ workOrders, onCreateNew, isAdmin = false, onEdit, onDelete, onCreateCertification }) => {
     const [expandedId, setExpandedId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [uploadingId, setUploadingId] = useState(null);
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
+
+    const handlePdfUpload = async (order, file) => {
+        if (!file) return;
+        setUploadingId(order._id);
+        try {
+            await workOrderService.uploadWorkOrderPdf(order._id, file);
+            queryClient.invalidateQueries({ queryKey: ['workOrders'] });
+            toast.success('PDF uploaded and attached to Work Order!');
+        } catch (err) {
+            console.error('PDF upload failed:', err);
+            toast.error('Failed to upload PDF');
+        } finally {
+            setUploadingId(null);
+        }
+    };
+
+    const handleViewPdf = async (order) => {
+        try {
+            const url = await uploadService.getSignedUrl(order.uploadedPdf);
+            window.open(url, '_blank');
+        } catch (err) {
+            toast.error('Failed to open file');
+        }
+    };
+
+    const handleRemovePdf = async (order) => {
+        try {
+            await uploadService.deleteImage(order.uploadedPdf);
+            await workOrderService.removeWorkOrderPdf(order._id);
+            queryClient.invalidateQueries({ queryKey: ['workOrders'] });
+            toast.success('Attachment removed');
+        } catch (err) {
+            toast.error('Failed to remove attachment');
+        }
+    };
 
     const handleExport = async (type, order, e) => {
         e.stopPropagation(); // Prevent expanding the card
@@ -26,7 +69,7 @@ const WorkOrdersList = ({ workOrders, onCreateNew, isAdmin = false, onEdit, onDe
                 toast.success(`Work Order CSV file downloaded successfully!`);
             }
         } catch (error) {
-            console.error(`${exportType} export error:`, error);
+            console.error(`${exportType} export error: `, error);
             toast.error(`Failed to generate ${exportType} file`);
         }
     };
@@ -106,7 +149,7 @@ const WorkOrdersList = ({ workOrders, onCreateNew, isAdmin = false, onEdit, onDe
                                     <h4 className="font-medium text-foreground">WO #{order.workOrderNumber}</h4>
                                     <p className="text-sm text-muted-foreground flex items-center gap-2">
                                         <Calendar className="w-3 h-3" />
-                                        {new Date(order.date).toLocaleDateString()}
+                                        {format(new Date(order.date), 'dd/MM/yyyy')}
                                     </p>
                                 </div>
                             </div>
@@ -180,6 +223,76 @@ const WorkOrdersList = ({ workOrders, onCreateNew, isAdmin = false, onEdit, onDe
                                             <File className="w-3.5 h-3.5" />
                                             <span className="text-xs font-medium">CSV</span>
                                         </motion.button>
+
+                                        {/* Upload PDF Button */}
+                                        {uploadingId === order._id ? (
+                                            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 text-muted-foreground ml-2">
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                <span className="text-xs">Uploading…</span>
+                                            </div>
+                                        ) : order.uploadedPdf ? (
+                                            <>
+                                                <motion.button
+                                                    initial={{ opacity: 0, scale: 0.8 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    onClick={(e) => { e.stopPropagation(); handleViewPdf(order); }}
+                                                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 transition-colors ml-2 border border-sky-500/20"
+                                                    title="View uploaded PDF"
+                                                >
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                    <span className="text-xs font-medium">View PDF</span>
+                                                </motion.button>
+                                                {isAdmin && (
+                                                    <motion.button
+                                                        initial={{ opacity: 0, scale: 0.8 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        onClick={(e) => { e.stopPropagation(); handleRemovePdf(order); }}
+                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors border border-red-500/20"
+                                                        title="Remove uploaded PDF"
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </motion.button>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <motion.label
+                                                initial={{ opacity: 0, scale: 0.8 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                transition={{ delay: 0.2 }}
+                                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 transition-colors ml-2 border border-sky-500/20 cursor-pointer"
+                                                title="Upload PDF for this Work Order"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <Upload className="w-3.5 h-3.5" />
+                                                <span className="text-xs font-medium">Upload PDF</span>
+                                                <input
+                                                    type="file"
+                                                    accept="application/pdf,.pdf,.doc,.docx,image/*"
+                                                    className="hidden"
+                                                    onChange={(e) => handlePdfUpload(order, e.target.files[0])}
+                                                />
+                                            </motion.label>
+                                        )}
+
+                                        {/* Create Certification Button */}
+                                        <motion.button
+                                            initial={{ opacity: 0, scale: 0.8 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            transition={{ delay: 0.15 }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (onCreateCertification) {
+                                                    onCreateCertification(order);
+                                                } else {
+                                                    navigate('/certification', { state: { sourceWorkOrder: order } });
+                                                }
+                                            }}
+                                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 transition-colors ml-2 border border-orange-500/20"
+                                            title="Create Certification from this Work Order"
+                                        >
+                                            <ClipboardCheck className="w-3.5 h-3.5" />
+                                            <span className="text-xs font-medium">Create Certification</span>
+                                        </motion.button>
                                     </div>
                                 )}
                                 <motion.div
@@ -241,8 +354,8 @@ const WorkOrdersList = ({ workOrders, onCreateNew, isAdmin = false, onEdit, onDe
                                                                 <tr key={idx} className="border-b border-white/5">
                                                                     <td className="p-2">{item.workDescription}</td>
                                                                     <td className="p-2">{item.plannedLabour}</td>
-                                                                    <td className="p-2">{new Date(item.workStartDate).toLocaleDateString()}</td>
-                                                                    <td className="p-2">{new Date(item.workFinishDate).toLocaleDateString()}</td>
+                                                                    <td className="p-2">{format(new Date(item.workStartDate), 'dd/MM/yyyy')}</td>
+                                                                    <td className="p-2">{format(new Date(item.workFinishDate), 'dd/MM/yyyy')}</td>
                                                                     <td className="p-2">{item.workArea}</td>
                                                                     <td className="p-2">₹{item.rate}</td>
                                                                     <td className="p-2 font-semibold">₹{item.totalAmount}</td>
