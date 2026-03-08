@@ -1,11 +1,15 @@
 import api from './api';
 
 export const entryService = {
-    // Get all entries
-    async getAll() {
-        const response = await api.get('/entries');
-        return response.data;
+    // Get all entries (paginated)
+    async getAll({ page = 1, limit = 200, search = '' } = {}) {
+        const params = new URLSearchParams();
+        params.set('page', page); params.set('limit', limit);
+        if (search) params.set('search', search);
+        const response = await api.get(`/entries?${params.toString()}`);
+        return response.data; // { entries, total, hasMore }
     },
+
 
     // Create new entry
     async create(entryData) {

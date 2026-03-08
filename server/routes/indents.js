@@ -82,23 +82,48 @@ router.post('/', authenticate, async (req, res) => {
     }
 });
 
-// Get all Indents
+// Get all Indents (with pagination, search, and filter)
 router.get('/', authenticate, async (req, res) => {
     try {
-        let query = {};
-        if (req.query.siteName) {
-            query.siteName = req.query.siteName;
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.max(1, Math.min(200, parseInt(req.query.limit) || 20));
+        const skip = (page - 1) * limit;
+        const search = req.query.search?.trim() || '';
+        const priority = req.query.priority?.trim() || '';
+        const status = req.query.status?.trim() || ''; // 'verified' | 'unverified'
+
+        const query = {};
+
+        if (req.query.siteName) query.siteName = req.query.siteName;
+        if (priority && priority !== 'all') query.priority = priority;
+        if (status === 'verified') query.verifiedByPurchaseManager = true;
+        if (status === 'unverified') query.verifiedByPurchaseManager = false;
+
+        if (search) {
+            query.$or = [
+                { indentNumber: { $regex: search, $options: 'i' } },
+                { siteName: { $regex: search, $options: 'i' } },
+                { siteEngineerName: { $regex: search, $options: 'i' } },
+                { workDescription: { $regex: search, $options: 'i' } },
+            ];
         }
 
-        const indents = await Indent.find(query)
-            .populate('createdBy', 'fullName email')
-            .populate('verifiedBy', 'fullName email')
-            .sort({ createdAt: -1 });
-        res.status(200).json(indents);
+        const [indents, total] = await Promise.all([
+            Indent.find(query)
+                .populate('createdBy', 'fullName email')
+                .populate('verifiedBy', 'fullName email')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            Indent.countDocuments(query),
+        ]);
+
+        res.status(200).json({ indents, total, page, limit, hasMore: skip + indents.length < total });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
+
 
 // Update an Indent
 router.put('/:id', authenticate, async (req, res) => {

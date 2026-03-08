@@ -5,19 +5,41 @@ import authMiddleware from '../middleware/authMiddleware.js';
 const router = express.Router();
 
 // @route   GET /api/workcompletions
-// @desc    Get all work completions
+// @desc    Get all work completions (paginated)
 // @access  Private
 router.get('/', authMiddleware, async (req, res) => {
     try {
-        const workCompletions = await WorkCompletion.find()
-            .populate('createdBy', 'fullName email')
-            .sort({ createdAt: -1 });
-        res.json(workCompletions);
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.max(1, Math.min(200, parseInt(req.query.limit) || 20));
+        const skip = (page - 1) * limit;
+        const search = req.query.search?.trim() || '';
+
+        const query = {};
+        if (search) {
+            query.$or = [
+                { workOrderNumber: { $regex: search, $options: 'i' } },
+                { contractorName: { $regex: search, $options: 'i' } },
+                { engineerName: { $regex: search, $options: 'i' } },
+                { workTrade: { $regex: search, $options: 'i' } },
+            ];
+        }
+
+        const [workCompletions, total] = await Promise.all([
+            WorkCompletion.find(query)
+                .populate('createdBy', 'fullName email')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            WorkCompletion.countDocuments(query),
+        ]);
+
+        res.json({ workCompletions, total, page, limit, hasMore: skip + workCompletions.length < total });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Server Error' });
     }
 });
+
 
 // @route   GET /api/workcompletions/:id
 // @desc    Get single work completion by ID

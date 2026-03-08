@@ -21,7 +21,7 @@ import { generateWorkCompletionPDF } from "@/utils/workCompletionPdfExport";
 import { generateWorkCompletionExcel } from "@/utils/workCompletionExcelExport";
 import { generateWorkCompletionCSV } from "@/utils/workCompletionCsvExport";
 
-const WorkCompletionsList = ({ workCompletions, onRefresh, isAdmin, onEdit, onDelete, onCreateNew }) => {
+const WorkCompletionsList = ({ workCompletions, hasMore, isLoadingMore, onLoadMore, onRefresh, isAdmin, onEdit, onDelete, onCreateNew }) => {
     const [expandedId, setExpandedId] = useState(null);
     const [selectedImage, setSelectedImage] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -517,6 +517,27 @@ const WorkCompletionsList = ({ workCompletions, onRefresh, isAdmin, onEdit, onDe
                     );
                 })
             })()}
+
+            {/* Load More Pagination */}
+            {hasMore && onLoadMore && (
+                <div className="p-4 flex justify-center mt-4 border-t border-white/10">
+                    <button
+                        onClick={onLoadMore}
+                        disabled={isLoadingMore}
+                        className="bg-white/5 border border-white/10 hover:bg-white/10 min-w-[200px] px-4 py-2 rounded-xl transition-all flex justify-center items-center text-orange-400 font-medium"
+                    >
+                        {isLoadingMore ? (
+                            <span className="flex items-center gap-2">
+                                <span className="w-4 h-4 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+                                Loading...
+                            </span>
+                        ) : (
+                            'Load More Certifications'
+                        )}
+                    </button>
+                </div>
+            )}
+
             {/* Image Modal */}
             <AnimatePresence>
                 {selectedImage && (

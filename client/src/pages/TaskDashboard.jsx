@@ -1,17 +1,27 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, RefreshCw, ClipboardList, LogOut, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, ClipboardList, LogOut, Trash2, Search, X, Loader2 } from "lucide-react";
 import BackgroundOrbs from "@/components/BackgroundOrbs";
 import TaskForm from "@/components/TaskForm";
 import { getTasks, deleteTask, updateTask } from "@/services/taskService";
-import { Button } from "@/components/ui/button"; // Assuming shared UI components
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+
+const PAGE_LIMIT = 20;
+
+const STATUS_OPTIONS = [
+    { value: 'all', label: 'All Statuses' },
+    { value: 'Pending', label: 'Pending' },
+    { value: 'In Progress', label: 'In Progress' },
+    { value: 'Completed', label: 'Completed' },
+    { value: 'Delayed', label: 'Delayed' },
+];
 
 const TaskDashboard = () => {
     const navigate = useNavigate();
@@ -20,76 +30,98 @@ const TaskDashboard = () => {
     const [showTaskForm, setShowTaskForm] = useState(false);
     const [taskToDelete, setTaskToDelete] = useState(null);
 
-    const { data: tasks = [], isLoading, isError } = useQuery({
-        queryKey: ['tasks'],
-        queryFn: () => getTasks() // Pass projectId if needed, currently getting all
-    });
+    // ── Search & Filter state ──────────────────────────────────────────────
+    const [searchInput, setSearchInput] = useState("");
+    const [searchQuery, setSearchQuery] = useState("");   // debounced value sent to API
+    const [statusFilter, setStatusFilter] = useState("all");
+    const debounceRef = useRef(null);
 
+    // ── Task list state ──────────────────────────────────────────────────
+    const [tasks, setTasks] = useState([]);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
+    const [total, setTotal] = useState(0);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+    // ── Debounce search input (400ms) ──────────────────────────────────────
+    useEffect(() => {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            setSearchQuery(searchInput.trim());
+        }, 400);
+        return () => clearTimeout(debounceRef.current);
+    }, [searchInput]);
+
+    // ── Fetch helpers ──────────────────────────────────────────────────────
+    const fetchPage = useCallback(async (pg, search, status, append = false) => {
+        try {
+            append ? setIsLoadingMore(true) : setIsLoading(true);
+            const data = await getTasks({ page: pg, limit: PAGE_LIMIT, search, status });
+            setTasks(prev => append ? [...prev, ...data.tasks] : data.tasks);
+            setHasMore(data.hasMore);
+            setTotal(data.total);
+            setPage(pg);
+        } catch (err) {
+            toast.error(err || "Failed to load tasks");
+        } finally {
+            setIsLoading(false);
+            setIsLoadingMore(false);
+        }
+    }, []);
+
+    // Re-fetch on search/filter change
+    useEffect(() => {
+        fetchPage(1, searchQuery, statusFilter, false);
+    }, [searchQuery, statusFilter, fetchPage]);
+
+    const handleLoadMore = () => fetchPage(page + 1, searchQuery, statusFilter, true);
+    const handleRefresh = () => fetchPage(1, searchQuery, statusFilter, false);
+
+    // ── Mutations ──────────────────────────────────────────────────────────
     const deleteTaskMutation = useMutation({
         mutationFn: deleteTask,
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['tasks'] });
             toast.success("Task deleted successfully");
+            fetchPage(1, searchQuery, statusFilter, false);
         },
-        onError: (error) => {
-            toast.error(error || "Failed to delete task");
-        }
+        onError: (error) => toast.error(error || "Failed to delete task"),
     });
 
     const updateTaskMutation = useMutation({
         mutationFn: ({ id, status }) => updateTask(id, { status }),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        onSuccess: (updated) => {
             toast.success("Task status updated");
+            // Update row in-place — no full reload needed
+            setTasks(prev => prev.map(t => t._id === updated._id ? updated : t));
         },
-        onError: (error) => {
-            toast.error(error || "Failed to update task status");
-        }
+        onError: (error) => toast.error(error || "Failed to update task status"),
     });
 
-    const handleDelete = (id) => {
-        setTaskToDelete(id);
-    };
-
-    const confirmDeleteTask = async () => {
-        if (taskToDelete) {
-            deleteTaskMutation.mutate(taskToDelete);
-            setTaskToDelete(null);
-        }
-    };
-
-    const handleStatusChange = (id, newStatus) => {
-        updateTaskMutation.mutate({ id, status: newStatus });
-    };
-
-    const handleLogout = () => {
-        logout();
-        navigate("/login");
-    };
+    const handleDelete = (id) => setTaskToDelete(id);
+    const confirmDeleteTask = () => { if (taskToDelete) { deleteTaskMutation.mutate(taskToDelete); setTaskToDelete(null); } };
+    const handleStatusChange = (id, newStatus) => updateTaskMutation.mutate({ id, status: newStatus });
+    const handleLogout = () => { logout(); navigate("/login"); };
+    const clearSearch = () => { setSearchInput(""); setSearchQuery(""); };
 
     return (
-        <div className="min-h-screen relative overflow-hidden flex bg-background">
+        <div className="h-screen overflow-hidden relative flex bg-background">
             <BackgroundOrbs />
 
-            {/* Sidebar - Simplified for Project Manager */}
-            <aside className="relative z-20 w-64 border-r border-white/10 bg-black/20 backdrop-blur-xl flex flex-col hidden md:flex">
+            {/* Sidebar */}
+            <aside className="relative z-20 w-64 border-r border-white/10 bg-black/20 backdrop-blur-xl flex-col hidden md:flex">
                 <div className="p-6">
                     <h1 className="text-2xl font-bold text-foreground">
                         Project <span className="text-gradient-primary">Manager</span>
                     </h1>
                     <p className="text-xs text-muted-foreground mt-1">Task Management</p>
                 </div>
-
                 <nav className="flex-1 px-4 space-y-2 py-4">
-                    <button
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/20 text-primary border border-primary/20 transition-all"
-                    >
+                    <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/20 text-primary border border-primary/20 transition-all">
                         <ClipboardList className="w-5 h-5" />
                         <span className="font-medium">Task List</span>
                     </button>
-                    {/* Add more links here if needed */}
                 </nav>
-
                 <div className="p-4 border-t border-white/10">
                     <button
                         onClick={handleLogout}
@@ -104,10 +136,15 @@ const TaskDashboard = () => {
             {/* Main Content */}
             <main className="relative z-10 flex-1 flex flex-col h-screen overflow-hidden">
                 <header className="h-16 border-b border-white/10 bg-black/10 backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0">
-                    <h2 className="text-lg font-semibold text-foreground">Task List</h2>
+                    <h2 className="text-lg font-semibold text-foreground">
+                        Task List
+                        {total > 0 && (
+                            <span className="ml-2 text-xs text-muted-foreground font-normal">({total} total)</span>
+                        )}
+                    </h2>
                     <div className="flex items-center gap-2 md:gap-3">
                         <button
-                            onClick={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                            onClick={handleRefresh}
                             className="p-2 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
                             title="Refresh Data"
                         >
@@ -116,17 +153,29 @@ const TaskDashboard = () => {
                         <button
                             onClick={handleLogout}
                             className="p-2 md:hidden rounded-lg hover:bg-white/10 text-muted-foreground hover:text-red-400 transition-colors"
-                            title="Logout"
                         >
                             <LogOut className="w-5 h-5" />
                         </button>
-                        {!showTaskForm && (
-                            <Button onClick={() => setShowTaskForm(true)} size="sm" className="gap-2">
-                                <Plus className="w-4 h-4" />
-                                <span className="hidden sm:inline">Assign New Task</span>
-                                <span className="sm:hidden">New</span>
-                            </Button>
-                        )}
+                        <Button
+                            type="button"
+                            onClick={() => setShowTaskForm(v => !v)}
+                            size="sm"
+                            variant={showTaskForm ? "outline" : "default"}
+                            className="gap-2"
+                        >
+                            {showTaskForm ? (
+                                <>
+                                    <X className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Cancel</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Plus className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Assign New Task</span>
+                                    <span className="sm:hidden">New</span>
+                                </>
+                            )}
+                        </Button>
                     </div>
                 </header>
 
@@ -143,91 +192,158 @@ const TaskDashboard = () => {
                                     <Button variant="ghost" onClick={() => setShowTaskForm(false)}>Cancel</Button>
                                 </div>
                                 <TaskForm
-                                    onSuccess={() => setShowTaskForm(false)}
+                                    onSuccess={() => { setShowTaskForm(false); handleRefresh(); }}
                                     onCancel={() => setShowTaskForm(false)}
                                 />
                             </div>
                         ) : (
-                            <div className="glass-card overflow-hidden">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-white/5 text-muted-foreground font-medium uppercase text-xs">
-                                            <tr>
-                                                <th className="p-4 whitespace-nowrap">Timestamp</th>
-                                                <th className="p-4 whitespace-nowrap">Work Particulars</th>
-                                                <th className="p-4 whitespace-nowrap">Contractor</th>
-                                                <th className="p-4 whitespace-nowrap">Planned Start</th>
-                                                <th className="p-4 whitespace-nowrap">Planned Finish</th>
-                                                <th className="p-4 whitespace-nowrap">Duration</th>
-                                                <th className="p-4 whitespace-nowrap">Status</th>
-                                                <th className="p-4 whitespace-nowrap">Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-white/10">
-                                            {isLoading ? (
+                            <>
+                                {/* ── Search & Filter bar ─────────────────────────── */}
+                                <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                                        <input
+                                            type="text"
+                                            value={searchInput}
+                                            onChange={e => setSearchInput(e.target.value)}
+                                            placeholder="Search task ID or description..."
+                                            className="w-full pl-9 pr-8 py-2.5 rounded-lg bg-black/20 border border-white/10 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-muted-foreground/50"
+                                        />
+                                        {searchInput && (
+                                            <button
+                                                onClick={clearSearch}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                        <SelectTrigger className="w-full sm:w-44 bg-black/20 border-white/10 text-sm h-auto py-2.5">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {STATUS_OPTIONS.map(o => (
+                                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* ── Table ─────────────────────────────────────── */}
+                                <div className="glass-card overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="bg-white/5 text-muted-foreground font-medium uppercase text-xs">
                                                 <tr>
-                                                    <td colSpan="8" className="p-8 text-center text-muted-foreground">Loading tasks...</td>
+                                                    <th className="p-4 whitespace-nowrap">Timestamp</th>
+                                                    <th className="p-4 whitespace-nowrap">Work Particulars</th>
+                                                    <th className="p-4 whitespace-nowrap">Contractor</th>
+                                                    <th className="p-4 whitespace-nowrap">Planned Start</th>
+                                                    <th className="p-4 whitespace-nowrap">Planned Finish</th>
+                                                    <th className="p-4 whitespace-nowrap">Duration</th>
+                                                    <th className="p-4 whitespace-nowrap">Status</th>
+                                                    <th className="p-4 whitespace-nowrap">Action</th>
                                                 </tr>
-                                            ) : tasks.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan="8" className="p-8 text-center text-muted-foreground">No tasks assigned yet.</td>
-                                                </tr>
-                                            ) : (
-                                                tasks.map((task) => (
-                                                    <tr key={task._id} className="hover:bg-white/5 transition-colors">
-                                                        <td className="p-4 text-muted-foreground whitespace-nowrap">
-                                                            {task.createdAt ? format(new Date(task.createdAt), 'dd/MM/yyyy hh:mm a') : '—'}
-                                                        </td>
-                                                        <td className="p-4 text-foreground">{task.workParticulars || '—'}</td>
-                                                        <td className="p-4 text-foreground">{task.contractor?.name || '—'}</td>
-                                                        <td className="p-4 text-muted-foreground whitespace-nowrap">
-                                                            {task.plannedStartDate ? format(new Date(task.plannedStartDate), 'dd/MM/yyyy') : '—'}
-                                                        </td>
-                                                        <td className="p-4 text-muted-foreground whitespace-nowrap">
-                                                            {task.plannedFinishDate ? format(new Date(task.plannedFinishDate), 'dd/MM/yyyy') : '—'}
-                                                        </td>
-                                                        <td className="p-4 font-medium">{task.duration ? `${task.duration} Days` : '—'}</td>
-                                                        <td className="p-4">
-                                                            <Select
-                                                                defaultValue={task.status}
-                                                                onValueChange={(value) => handleStatusChange(task._id, value)}
-                                                            >
-                                                                <SelectTrigger className={`w-[130px] h-8 text-xs ${task.status === 'Completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                                                                    task.status === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                                                        'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                                                                    }`}>
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="Pending">Pending</SelectItem>
-                                                                    <SelectItem value="In Progress">In Progress</SelectItem>
-                                                                    <SelectItem value="Completed">Completed</SelectItem>
-                                                                    <SelectItem value="Delayed">Delayed</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <button
-                                                                onClick={() => handleDelete(task._id)}
-                                                                className="p-1.5 hover:bg-white/20 rounded-lg text-red-400 transition-colors"
-                                                                title="Delete Task"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/10">
+                                                {isLoading ? (
+                                                    <tr>
+                                                        <td colSpan="8" className="p-8 text-center text-muted-foreground">
+                                                            <Loader2 className="w-5 h-5 animate-spin inline-block mr-2" />
+                                                            Loading tasks...
                                                         </td>
                                                     </tr>
-                                                ))
-                                            )}
-                                        </tbody>
-                                    </table>
+                                                ) : tasks.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan="8" className="p-8 text-center text-muted-foreground">
+                                                            {searchQuery || statusFilter !== 'all'
+                                                                ? 'No tasks match your search.'
+                                                                : 'No tasks assigned yet.'}
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    tasks.map((task) => (
+                                                        <tr key={task._id} className="hover:bg-white/5 transition-colors">
+                                                            <td className="p-4 text-muted-foreground whitespace-nowrap">
+                                                                {task.createdAt ? format(new Date(task.createdAt), 'dd/MM/yyyy hh:mm a') : '—'}
+                                                            </td>
+                                                            <td className="p-4 text-foreground">{task.workParticulars || '—'}</td>
+                                                            <td className="p-4 text-foreground">{task.contractor?.name || task.contractorName || '—'}</td>
+                                                            <td className="p-4 text-muted-foreground whitespace-nowrap">
+                                                                {task.plannedStartDate ? format(new Date(task.plannedStartDate), 'dd/MM/yyyy') : '—'}
+                                                            </td>
+                                                            <td className="p-4 text-muted-foreground whitespace-nowrap">
+                                                                {task.plannedFinishDate ? format(new Date(task.plannedFinishDate), 'dd/MM/yyyy') : '—'}
+                                                            </td>
+                                                            <td className="p-4 font-medium">{task.duration ? `${task.duration} Days` : '—'}</td>
+                                                            <td className="p-4">
+                                                                <Select
+                                                                    defaultValue={task.status}
+                                                                    onValueChange={(value) => handleStatusChange(task._id, value)}
+                                                                >
+                                                                    <SelectTrigger className={`w-[130px] h-8 text-xs ${task.status === 'Completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                                                                        task.status === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                                                            task.status === 'Delayed' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                                                                'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                                                                        }`}>
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="Pending">Pending</SelectItem>
+                                                                        <SelectItem value="In Progress">In Progress</SelectItem>
+                                                                        <SelectItem value="Completed">Completed</SelectItem>
+                                                                        <SelectItem value="Delayed">Delayed</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <button
+                                                                    onClick={() => handleDelete(task._id)}
+                                                                    className="p-1.5 hover:bg-white/20 rounded-lg text-red-400 transition-colors"
+                                                                    title="Delete Task"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* ── Load More button ───────────────────────── */}
+                                    {hasMore && (
+                                        <div className="flex justify-center p-4 border-t border-white/10">
+                                            <button
+                                                onClick={handleLoadMore}
+                                                disabled={isLoadingMore}
+                                                className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-muted-foreground hover:text-foreground transition-all disabled:opacity-50"
+                                            >
+                                                {isLoadingMore ? (
+                                                    <><Loader2 className="w-4 h-4 animate-spin" />Loading...</>
+                                                ) : (
+                                                    `Load More (${total - tasks.length} remaining)`
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* All loaded indicator */}
+                                    {!hasMore && tasks.length > 0 && (
+                                        <p className="text-center text-xs text-muted-foreground py-3 border-t border-white/10">
+                                            All {total} task{total !== 1 ? 's' : ''} loaded
+                                        </p>
+                                    )}
                                 </div>
-                            </div>
+                            </>
                         )}
                     </motion.div>
                 </div>
             </main>
 
-            {/* Delete Confirmation */}
             <ConfirmModal
                 isOpen={!!taskToDelete}
                 onClose={() => setTaskToDelete(null)}

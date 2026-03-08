@@ -23,11 +23,11 @@ const workItemSchema = new mongoose.Schema({
     },
     rate: {
         type: Number,
-        required: true,
+        default: 0,
     },
     totalAmount: {
         type: Number,
-        required: true,
+        default: 0,
     },
 });
 

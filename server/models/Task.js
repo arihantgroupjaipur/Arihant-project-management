@@ -45,6 +45,15 @@ const taskSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+// Indexes for fast querying at scale
+taskSchema.index({ status: 1 });           // fast filter by status
+taskSchema.index({ projectManager: 1 });   // fast filter by PM
+taskSchema.index({ createdAt: -1 });       // default sort
+taskSchema.index(                          // full-text search on key fields
+    { workParticulars: 'text', contractorName: 'text', taskId: 'text' },
+    { name: 'task_text_search' }
+);
+
 const Task = mongoose.model('Task', taskSchema);
 
 export default Task;

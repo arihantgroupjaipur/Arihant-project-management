@@ -1,8 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Plus, RefreshCw, Users, Pencil, Trash2, FileText, ClipboardCheck, BarChart3, LineChart, Menu, X, Calendar as CalendarIcon, LogOut, Eye, Sheet, File, ShoppingCart, FileCheck, Download } from "lucide-react";
+import {
+  ArrowLeft, Plus, RefreshCw, Users, Pencil, Trash2, FileText, ClipboardCheck, BarChart3, LineChart, Menu, X, Calendar as CalendarIcon, LogOut, Eye, Sheet, File, ShoppingCart, FileCheck, Download, RefreshCcw,
+  CheckCircle,
+  Database,
+  Link2
+} from "lucide-react";
 import BackgroundOrbs from "@/components/BackgroundOrbs";
 import PreviousEntries from "@/components/PreviousEntries";
 import WorkOrderForm from "@/components/WorkOrderForm";
@@ -16,6 +21,7 @@ import { workOrderService } from "@/services/workOrderService";
 import { workCompletionService } from "@/services/workCompletionService";
 import { entryService } from "@/services/entryService";
 import { getTasks, deleteTask, updateTask } from "@/services/taskService";
+import settingsService from '../services/settingsService';
 import MaterialVerificationsList from "@/components/MaterialVerificationsList";
 import MasterTracking from "@/components/MasterTracking";
 import TaskForm from "@/components/TaskForm";
@@ -56,7 +62,7 @@ const AdminDashboard = () => {
   const { logout, user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isSiteEngineer = user?.role === 'engineer';
-  const isTaskManager = user?.role === 'admin' || user?.role === 'project_manager';
+  const isTaskManager = user?.role === 'admin' || user?.role === 'project_manager' || user?.role === 'purchase_manager';
   const isPurchaseManager = user?.role === 'purchase_manager';
   const canChangePurchaseOrderStatus = user?.role === 'admin' || user?.role === 'project_manager' || user?.role === 'purchase_manager';
   const panelTitle =
@@ -115,6 +121,13 @@ const AdminDashboard = () => {
   const [editingTask, setEditingTask] = useState(null);
   const [editTaskForm, setEditTaskForm] = useState({});
 
+  // Task Pagination State
+  const [tasks, setTasks] = useState([]);
+  const [taskPage, setTaskPage] = useState(1);
+  const [hasMoreTasks, setHasMoreTasks] = useState(false);
+  const [isTasksLoading, setIsTasksLoading] = useState(false);
+  const [isTasksLoadingMore, setIsTasksLoadingMore] = useState(false);
+
   // Site Lookup states
   const [activeLookupTab, setActiveLookupTab] = useState('siteName');
   const [isLookupDialogOpen, setIsLookupDialogOpen] = useState(false);
@@ -128,41 +141,263 @@ const AdminDashboard = () => {
   // Date filter for Daily Progress
   const [selectedDate, setSelectedDate] = useState(new Date());
 
+  // Integrations state
+  const [googleSheetIdInput, setGoogleSheetIdInput] = useState('');
+  const [googleSheetIds, setGoogleSheetIds] = useState([]);
+  const [isSavingIntegration, setIsSavingIntegration] = useState(false);
+
+  // Work Orders Pagination State
+  const [workOrders, setWorkOrders] = useState([]);
+  const [workOrderPage, setWorkOrderPage] = useState(1);
+  const [hasMoreWorkOrders, setHasMoreWorkOrders] = useState(false);
+  const [isWorkOrdersLoading, setIsWorkOrdersLoading] = useState(false);
+  const [isWorkOrdersLoadingMore, setIsWorkOrdersLoadingMore] = useState(false);
+
+  // Work Completions Pagination State
+  const [workCompletions, setWorkCompletions] = useState([]);
+  const [workCompletionPage, setWorkCompletionPage] = useState(1);
+  const [hasMoreWorkCompletions, setHasMoreWorkCompletions] = useState(false);
+  const [isWorkCompletionsLoading, setIsWorkCompletionsLoading] = useState(false);
+  const [isWorkCompletionsLoadingMore, setIsWorkCompletionsLoadingMore] = useState(false);
+
+  // Daily Deployments (Entries) Pagination State
+  const [entries, setEntries] = useState([]);
+  const [entryPage, setEntryPage] = useState(1);
+  const [hasMoreEntries, setHasMoreEntries] = useState(false);
+  const [isEntriesLoading, setIsEntriesLoading] = useState(false);
+  const [isEntriesLoadingMore, setIsEntriesLoadingMore] = useState(false);
+
   // Queries
   const { data: contractors = [] } = useQuery({
     queryKey: ['contractors'],
     queryFn: contractorService.getAll
   });
 
-  const { data: workOrders = [] } = useQuery({
-    queryKey: ['workOrders'],
-    queryFn: workOrderService.getAllWorkOrders
+  // Fetch Work Orders with Pagination
+  const fetchWorkOrders = async (pageNum, isLoadMore = false) => {
+    try {
+      isLoadMore ? setIsWorkOrdersLoadingMore(true) : setIsWorkOrdersLoading(true);
+      const data = await workOrderService.getAllWorkOrders({ page: pageNum, limit: 100 });
+      setHasMoreWorkOrders(data.hasMore);
+      const fetchedWO = data.workOrders || [];
+      if (isLoadMore) {
+        setWorkOrders(prev => [...prev, ...fetchedWO]);
+      } else {
+        setWorkOrders(fetchedWO);
+      }
+    } catch (error) {
+      console.error("Failed to fetch work orders:", error);
+      toast.error("Failed to load work orders");
+    } finally {
+      setIsWorkOrdersLoading(false);
+      setIsWorkOrdersLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkOrders(1, false);
+    setWorkOrderPage(1);
+  }, []);
+
+  const loadMoreWorkOrders = () => {
+    if (!hasMoreWorkOrders || isWorkOrdersLoadingMore) return;
+    const nextPage = workOrderPage + 1;
+    setWorkOrderPage(nextPage);
+    fetchWorkOrders(nextPage, true);
+  };
+
+  // Fetch Work Completions with Pagination
+  const fetchWorkCompletions = async (pageNum, isLoadMore = false) => {
+    try {
+      isLoadMore ? setIsWorkCompletionsLoadingMore(true) : setIsWorkCompletionsLoading(true);
+      const data = await workCompletionService.getAllWorkCompletions({ page: pageNum, limit: 100 });
+      setHasMoreWorkCompletions(data.hasMore);
+      const fetchedWC = data.workCompletions || [];
+      if (isLoadMore) {
+        setWorkCompletions(prev => [...prev, ...fetchedWC]);
+      } else {
+        setWorkCompletions(fetchedWC);
+      }
+    } catch (error) {
+      console.error("Failed to fetch work completions:", error);
+      toast.error("Failed to load work certifications");
+    } finally {
+      setIsWorkCompletionsLoading(false);
+      setIsWorkCompletionsLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkCompletions(1, false);
+    setWorkCompletionPage(1);
+  }, []);
+
+  const loadMoreWorkCompletions = () => {
+    if (!hasMoreWorkCompletions || isWorkCompletionsLoadingMore) return;
+    const nextPage = workCompletionPage + 1;
+    setWorkCompletionPage(nextPage);
+    fetchWorkCompletions(nextPage, true);
+  };
+
+  // Fetch Daily Deployments (Entries) with Pagination
+  const fetchEntries = async (pageNum, isLoadMore = false) => {
+    try {
+      isLoadMore ? setIsEntriesLoadingMore(true) : setIsEntriesLoading(true);
+      const data = await entryService.getAll({ page: pageNum, limit: 100 });
+      setHasMoreEntries(data.hasMore);
+      const fetchedEntries = data.entries || [];
+      if (isLoadMore) {
+        setEntries(prev => [...prev, ...fetchedEntries]);
+      } else {
+        setEntries(fetchedEntries);
+      }
+    } catch (error) {
+      console.error("Failed to fetch entries:", error);
+      toast.error("Failed to load daily deployments");
+    } finally {
+      setIsEntriesLoading(false);
+      setIsEntriesLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEntries(1, false);
+    setEntryPage(1);
+  }, []);
+
+  const loadMoreEntries = () => {
+    if (!hasMoreEntries || isEntriesLoadingMore) return;
+    const nextPage = entryPage + 1;
+    setEntryPage(nextPage);
+    fetchEntries(nextPage, true);
+  };
+
+  // Fetch Tasks with Pagination
+  const fetchTasks = async (pageNum, isLoadMore = false) => {
+    try {
+      isLoadMore ? setIsTasksLoadingMore(true) : setIsTasksLoading(true);
+      const data = await getTasks({ page: pageNum, limit: 100 });
+      setHasMoreTasks(data.hasMore);
+      const fetchedTasks = data.tasks || [];
+      if (isLoadMore) {
+        setTasks(prev => [...prev, ...fetchedTasks]);
+      } else {
+        setTasks(fetchedTasks);
+      }
+    } catch (error) {
+      console.error("Failed to fetch tasks:", error);
+      toast.error("Failed to load tasks");
+    } finally {
+      setIsTasksLoading(false);
+      setIsTasksLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTasks(1, false);
+    setTaskPage(1);
+  }, []); // Refetch when component mounts or filter changes if needed
+
+  const loadMoreTasks = () => {
+    if (!hasMoreTasks || isTasksLoadingMore) return;
+    const nextPage = taskPage + 1;
+    setTaskPage(nextPage);
+    fetchTasks(nextPage, true);
+  };
+
+  // Indents Pagination State
+  const [indents, setIndents] = useState([]);
+  const [indentPage, setIndentPage] = useState(1);
+  const [hasMoreIndents, setHasMoreIndents] = useState(false);
+  const [isIndentsLoading, setIsIndentsLoading] = useState(false);
+  const [isIndentsLoadingMore, setIsIndentsLoadingMore] = useState(false);
+
+  // Fetch Indents with Pagination
+  const fetchIndents = async (pageNum, isLoadMore = false) => {
+    try {
+      isLoadMore ? setIsIndentsLoadingMore(true) : setIsIndentsLoading(true);
+      const data = await getIndents({ page: pageNum, limit: 100 });
+      setHasMoreIndents(data.hasMore);
+      const fetchedIndents = data.indents || [];
+      if (isLoadMore) {
+        setIndents(prev => [...prev, ...fetchedIndents]);
+      } else {
+        setIndents(fetchedIndents);
+      }
+    } catch (error) {
+      console.error("Failed to fetch indents:", error);
+      toast.error("Failed to load indents");
+    } finally {
+      setIsIndentsLoading(false);
+      setIsIndentsLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchIndents(1, false);
+    setIndentPage(1);
+  }, []);
+
+  const loadMoreIndents = () => {
+    if (!hasMoreIndents || isIndentsLoadingMore) return;
+    const nextPage = indentPage + 1;
+    setIndentPage(nextPage);
+    fetchIndents(nextPage, true);
+  };
+
+  // Purchase Orders Pagination State
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [purchaseOrderPage, setPurchaseOrderPage] = useState(1);
+  const [hasMorePurchaseOrders, setHasMorePurchaseOrders] = useState(false);
+  const [isPurchaseOrdersLoading, setIsPurchaseOrdersLoading] = useState(false);
+  const [isPurchaseOrdersLoadingMore, setIsPurchaseOrdersLoadingMore] = useState(false);
+
+  // Fetch Purchase Orders with Pagination
+  const fetchPurchaseOrders = async (pageNum, isLoadMore = false) => {
+    try {
+      isLoadMore ? setIsPurchaseOrdersLoadingMore(true) : setIsPurchaseOrdersLoading(true);
+      const data = await purchaseOrderService.getPurchaseOrders({ page: pageNum, limit: 100 });
+      setHasMorePurchaseOrders(data.hasMore);
+      const fetchedPOs = data.purchaseOrders || [];
+      if (isLoadMore) {
+        setPurchaseOrders(prev => [...prev, ...fetchedPOs]);
+      } else {
+        setPurchaseOrders(fetchedPOs);
+      }
+    } catch (error) {
+      console.error("Failed to fetch purchase orders:", error);
+      toast.error("Failed to load purchase orders");
+    } finally {
+      setIsPurchaseOrdersLoading(false);
+      setIsPurchaseOrdersLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPurchaseOrders(1, false);
+    setPurchaseOrderPage(1);
+  }, []);
+
+  const loadMorePurchaseOrders = () => {
+    if (!hasMorePurchaseOrders || isPurchaseOrdersLoadingMore) return;
+    const nextPage = purchaseOrderPage + 1;
+    setPurchaseOrderPage(nextPage);
+    fetchPurchaseOrders(nextPage, true);
+  };
+
+  // Settings Queries
+  const { data: googleSheetIdSetting, refetch: refetchSettings } = useQuery({
+    queryKey: ['settings', 'google_sheet_id'],
+    queryFn: () => settingsService.getSetting('google_sheet_id'),
+    enabled: user?.role === 'admin'
   });
 
-  const { data: workCompletions = [] } = useQuery({
-    queryKey: ['workCompletions'],
-    queryFn: workCompletionService.getAllWorkCompletions,
-  });
-
-  const { data: entries = [] } = useQuery({
-    queryKey: ['entries'],
-    queryFn: entryService.getAll,
-  });
-
-  const { data: tasks = [], isLoading: isTasksLoading, isError: isTasksError } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: () => getTasks()
-  });
-
-  const { data: indents = [] } = useQuery({
-    queryKey: ['indents'],
-    queryFn: getIndents
-  });
-
-  const { data: purchaseOrders = [] } = useQuery({
-    queryKey: ['purchaseOrders'],
-    queryFn: purchaseOrderService.getPurchaseOrders
-  });
+  // Pre-fill input when setting loads
+  useEffect(() => {
+    if (googleSheetIdSetting?.value && !googleSheetIdInput) {
+      setGoogleSheetIdInput(googleSheetIdSetting.value);
+    }
+  }, [googleSheetIdSetting, googleSheetIdInput]);
 
   const { data: siteNames = [] } = useQuery({
     queryKey: ['siteLookups', 'siteName'],
@@ -191,7 +426,7 @@ const AdminDashboard = () => {
   const deleteTaskMutation = useMutation({
     mutationFn: deleteTask,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      fetchTasks(1, false);
       toast.success('Task deleted successfully');
       setTaskToDelete(null);
     },
@@ -210,7 +445,7 @@ const AdminDashboard = () => {
   const verifyIndentMutation = useMutation({
     mutationFn: ({ id, formData }) => indentService.verifyIndent(id, formData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['indents'] });
+      fetchIndents(1, false);
       toast.success('Indent verification updated');
       setIsVerifyIndentOpen(false);
       setVerifyingIndent(null);
@@ -224,7 +459,7 @@ const AdminDashboard = () => {
   const deleteIndentMutation = useMutation({
     mutationFn: (id) => indentService.deleteIndent(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['indents'] });
+      fetchIndents(1, false);
       toast.success('Indent deleted successfully');
       setIndentToDelete(null);
     },
@@ -237,7 +472,7 @@ const AdminDashboard = () => {
   const deletePurchaseOrderMutation = useMutation({
     mutationFn: (id) => purchaseOrderService.deletePurchaseOrder(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+      fetchPurchaseOrders(1, false);
       toast.success('Purchase Order deleted successfully');
     },
     onError: (error) => {
@@ -248,7 +483,7 @@ const AdminDashboard = () => {
   const updatePurchaseOrderStatusMutation = useMutation({
     mutationFn: ({ id, status }) => purchaseOrderService.updatePurchaseOrder(id, { status }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+      fetchPurchaseOrders(1, false);
       toast.success('Purchase Order status updated');
     },
     onError: (error) => {
@@ -488,6 +723,44 @@ const AdminDashboard = () => {
 
   const totalWorkers = entries.reduce((sum, e) => sum + e.workerCount, 0);
 
+  // Handle saving the Google Sheet integration
+  const handleSaveGoogleSheet = async (updatedIds = googleSheetIds) => {
+    try {
+      setIsSavingIntegration(true);
+      await settingsService.updateSetting('google_sheet_id', updatedIds);
+      await refetchSettings();
+      toast.success('Google Sheet configuration saved successfully!');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to save integration');
+    } finally {
+      setIsSavingIntegration(false);
+    }
+  };
+
+  const handleAddSheetId = () => {
+    if (!googleSheetIdInput.trim()) {
+      toast.error('Please enter a Spreadsheet ID');
+      return;
+    }
+
+    if (googleSheetIds.includes(googleSheetIdInput.trim())) {
+      toast.error('This Spreadsheet ID is already added.');
+      return;
+    }
+
+    const newIds = [...googleSheetIds, googleSheetIdInput.trim()];
+    setGoogleSheetIds(newIds);
+    setGoogleSheetIdInput('');
+    handleSaveGoogleSheet(newIds);
+  };
+
+  const handleRemoveSheetId = (idToRemove) => {
+    const newIds = googleSheetIds.filter(id => id !== idToRemove);
+    setGoogleSheetIds(newIds);
+    handleSaveGoogleSheet(newIds);
+  };
+
   // Sidebar link component
   const SidebarLink = ({ id, label, icon: Icon }) => (
     <button
@@ -536,6 +809,7 @@ const AdminDashboard = () => {
             </>
           )}
           <SidebarLink id="site-lookups" label="Site Lookups" icon={FileText} />
+          {/* ON HOLD: isAdmin && <SidebarLink id="integrations" label="Integrations" icon={Link2} /> */}
         </nav>
 
         <div className="p-4 border-t border-white/10">
@@ -601,6 +875,7 @@ const AdminDashboard = () => {
                   </>
                 )}
                 <SidebarLink id="site-lookups" label="Site Lookups" icon={FileText} />
+                {/* ON HOLD: isAdmin && <SidebarLink id="integrations" label="Integrations" icon={Link2} /> */}
               </nav>
 
               <div className="p-4 border-t border-white/10">
@@ -644,6 +919,7 @@ const AdminDashboard = () => {
               {activeTab === 'indent' && 'Indent / Site Requirement'}
               {activeTab === 'purchase-order' && 'Purchase Order Management'}
               {activeTab === 'material-verification' && 'Material Verification Certificate'}
+              {activeTab === 'integrations' && 'Integrations'}
             </h2>
           </div>
 
@@ -752,7 +1028,7 @@ const AdminDashboard = () => {
                     onSuccess={() => {
                       setShowDeploymentForm(false);
                       setEditingEntry(null);
-                      queryClient.invalidateQueries({ queryKey: ['entries'] });
+                      fetchEntries(1, false);
                     }}
                   />
                 </div>
@@ -771,6 +1047,9 @@ const AdminDashboard = () => {
                   </div>
                   <PreviousEntries
                     entries={entries}
+                    hasMore={hasMoreEntries}
+                    isLoadingMore={isEntriesLoadingMore}
+                    onLoadMore={loadMoreEntries}
                     onExport={handleExport}
                     isAdmin={isAdmin}
                     onEdit={(entry) => {
@@ -804,13 +1083,16 @@ const AdminDashboard = () => {
                     onSuccess={async () => {
                       setShowWorkOrderForm(false);
                       setEditingWorkOrder(null);
-                      queryClient.invalidateQueries({ queryKey: ['workOrders'] });
+                      fetchWorkOrders(1, false);
                     }}
                   />
                 </div>
               ) : (
                 <WorkOrdersList
                   workOrders={workOrders}
+                  hasMore={hasMoreWorkOrders}
+                  isLoadingMore={isWorkOrdersLoadingMore}
+                  onLoadMore={loadMoreWorkOrders}
                   isAdmin={isAdmin}
                   onEdit={(order) => {
                     setEditingWorkOrder(order);
@@ -827,6 +1109,7 @@ const AdminDashboard = () => {
                     setShowWorkCompletionForm(true);
                     setActiveTab('certification');
                   }}
+                  onSuccessUpload={() => fetchWorkOrders(1, false)}
                 />
               )}
             </motion.div>
@@ -855,14 +1138,17 @@ const AdminDashboard = () => {
                       setShowWorkCompletionForm(false);
                       setEditingWorkCompletion(null);
                       setCertificationSourceWorkOrder(null);
-                      queryClient.invalidateQueries({ queryKey: ['workCompletions'] });
+                      fetchWorkCompletions(1, false);
                     }}
                   />
                 </div>
               ) : (
                 <WorkCompletionsList
                   workCompletions={workCompletions}
-                  onRefresh={() => queryClient.invalidateQueries({ queryKey: ['workCompletions'] })}
+                  hasMore={hasMoreWorkCompletions}
+                  isLoadingMore={isWorkCompletionsLoadingMore}
+                  onLoadMore={loadMoreWorkCompletions}
+                  onRefresh={() => fetchWorkCompletions(1, false)}
                   isAdmin={isAdmin}
                   onEdit={(completion) => {
                     setEditingWorkCompletion(completion);
@@ -1125,10 +1411,11 @@ const AdminDashboard = () => {
                   </div>
                   <IndentForm
                     initialData={editingIndent}
+                    tasks={tasks}
                     onSuccess={() => {
                       setShowIndentForm(false);
                       setEditingIndent(null);
-                      queryClient.invalidateQueries({ queryKey: ['indents'] });
+                      fetchIndents(1, false);
                     }}
                     onCancel={() => {
                       setShowIndentForm(false);
@@ -1340,6 +1627,28 @@ const AdminDashboard = () => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Load More Pagination */}
+                  {(hasMoreIndents || isIndentsLoadingMore) && (
+                    <div className="p-4 flex justify-center mt-4 border-t border-white/5">
+                      <Button
+                        variant="outline"
+                        onClick={loadMoreIndents}
+                        disabled={isIndentsLoadingMore}
+                        className="bg-white/5 border border-white/10 hover:bg-white/10 min-w-[200px] text-primary"
+                      >
+                        {isIndentsLoadingMore ? (
+                          <span className="flex items-center gap-2">
+                            <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                            Loading...
+                          </span>
+                        ) : (
+                          'Load More Indents'
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
                 </div>
               )}
             </motion.div>
@@ -1368,7 +1677,7 @@ const AdminDashboard = () => {
                     onSuccess={() => {
                       setShowPurchaseOrderForm(false);
                       setEditingPurchaseOrder(null);
-                      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+                      fetchPurchaseOrders(1, false);
                     }}
                     onCancel={() => {
                       setShowPurchaseOrderForm(false);
@@ -1412,6 +1721,9 @@ const AdminDashboard = () => {
                   </div>
                   <PurchaseOrdersList
                     purchaseOrders={purchaseOrders}
+                    hasMore={hasMorePurchaseOrders}
+                    isLoadingMore={isPurchaseOrdersLoadingMore}
+                    onLoadMore={loadMorePurchaseOrders}
                     searchQuery={purchaseOrderSearch}
                     filterStatus={purchaseOrderFilterStatus}
                     isAdmin={isAdmin}
@@ -1479,7 +1791,7 @@ const AdminDashboard = () => {
                   searchQuery={purchaseOrderSearch}
                   filterStatus={purchaseOrderFilterStatus}
                   isAdmin={isAdmin}
-                  canEdit={isAdmin || isSiteEngineer}
+                  canEdit={isAdmin || isSiteEngineer || isPurchaseManager}
                   onVerificationSuccess={() => {
                     queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
                   }}
@@ -1581,13 +1893,6 @@ const AdminDashboard = () => {
                             <tr>
                               <td colSpan="10" className="p-8 text-center text-muted-foreground">
                                 Loading tasks…
-                              </td>
-                            </tr>
-                          );
-                          if (isTasksError) return (
-                            <tr>
-                              <td colSpan="10" className="p-8 text-center text-red-400">
-                                Failed to load tasks. Please refresh.
                               </td>
                             </tr>
                           );
@@ -1703,6 +2008,28 @@ const AdminDashboard = () => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Load More Pagination */}
+                  {(hasMoreTasks || isTasksLoadingMore) && (
+                    <div className="p-4 border-t border-white/10 flex justify-center bg-white/5 mt-4 rounded-xl">
+                      <Button
+                        variant="outline"
+                        onClick={loadMoreTasks}
+                        disabled={isTasksLoadingMore}
+                        className="bg-white/5 border-white/10 hover:bg-white/10 min-w-[150px]"
+                      >
+                        {isTasksLoadingMore ? (
+                          <span className="flex items-center gap-2">
+                            <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                            Loading...
+                          </span>
+                        ) : (
+                          'Load More Tasks'
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
                 </div>
               )}
             </motion.div>
@@ -1874,6 +2201,102 @@ const AdminDashboard = () => {
               className="max-w-6xl mx-auto"
             >
               <UserManagement />
+            </motion.div>
+          )}
+
+          {activeTab === 'integrations' && isAdmin && (
+            <motion.div
+              key="integrations"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="max-w-4xl mx-auto space-y-6"
+            >
+              <div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                  Integrations
+                </h2>
+                <p className="text-muted-foreground mt-1">Connect Arihant Project Management with external tools.</p>
+              </div>
+
+              <div className="bg-card border rounded-xl overflow-hidden shadow-sm">
+                <div className="p-6 border-b bg-muted/20">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-[#0F9D58]/10 rounded-lg">
+                      <Link2 className="w-6 h-6 text-[#0F9D58]" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground">Google Sheets Sync (Tasks)</h3>
+                      <p className="text-sm text-muted-foreground">Automatically sync all Tasks to a Google Sheet in real-time.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-6">
+                  <div className="bg-primary/5 rounded-lg p-4 border border-primary/10">
+                    <h4 className="font-medium text-primary mb-2">How to get your Spreadsheet ID:</h4>
+                    <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
+                      <li>Create or open a blank Google Sheet.</li>
+                      <li>Look at the URL: <code className="bg-muted px-1.5 py-0.5 rounded text-foreground">https://docs.google.com/spreadsheets/d/<span className="text-primary font-bold">YOUR_SPREADSHEET_ID</span>/edit</code></li>
+                      <li>Copy everything between <code className="bg-muted px-1 rounded">/d/</code> and <code className="bg-muted px-1 rounded">/edit</code> and paste it below.</li>
+                      <li className="text-amber-500 font-medium mt-2">Important: You MUST share your Google Sheet with the Service Account email (Editor access) for this to work!</li>
+                    </ol>
+                  </div>
+
+                  <div className="space-y-4">
+                    <label className="text-sm font-medium">Linked Spreadsheets</label>
+
+                    {googleSheetIds.length > 0 ? (
+                      <div className="space-y-2">
+                        {googleSheetIds.map((id, index) => (
+                          <div key={index} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg p-3">
+                            <div className="font-mono text-sm text-foreground truncate mr-4">{id}</div>
+                            <button
+                              onClick={() => handleRemoveSheetId(id)}
+                              disabled={isSavingIntegration}
+                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10 p-1.5 rounded-md transition-colors shrink-0"
+                              title="Remove Sheet"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground italic border border-dashed border-white/20 rounded-lg p-4 text-center">
+                        No spreadsheets linked yet.
+                      </div>
+                    )}
+
+                    <div className="pt-2">
+                      <label className="text-sm font-medium mb-2 block">Add New Spreadsheet ID</label>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input
+                          type="text"
+                          value={googleSheetIdInput}
+                          onChange={(e) => setGoogleSheetIdInput(e.target.value)}
+                          placeholder="e.g. 1BxiMVs0XRX5nZYz_... (Paste ID here)"
+                          className="flex-1 rounded-lg border border-input bg-background px-4 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        />
+                        <button
+                          onClick={handleAddSheetId}
+                          disabled={isSavingIntegration || !googleSheetIdInput.trim()}
+                          className="bg-primary text-primary-foreground hover:bg-primary/90 px-6 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 min-w-[120px] justify-center"
+                        >
+                          {isSavingIntegration ? (
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <Plus className="w-4 h-4" /> Add Sheet
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </motion.div>
           )}
         </div>

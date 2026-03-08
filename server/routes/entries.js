@@ -6,16 +6,34 @@ import adminMiddleware from '../middleware/adminMiddleware.js';
 const router = express.Router();
 
 // @route   GET /api/entries
-// @desc    Get all entries
+// @desc    Get all entries (paginated)
 // @access  Private
 router.get('/', authMiddleware, async (req, res) => {
     try {
-        const entries = await Entry.find().sort({ createdAt: -1 });
-        res.json(entries);
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.max(1, Math.min(200, parseInt(req.query.limit) || 20));
+        const skip = (page - 1) * limit;
+        const search = req.query.search?.trim() || '';
+
+        const query = {};
+        if (search) {
+            query.$or = [
+                { siteName: { $regex: search, $options: 'i' } },
+                { supervisorName: { $regex: search, $options: 'i' } },
+            ];
+        }
+
+        const [entries, total] = await Promise.all([
+            Entry.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+            Entry.countDocuments(query),
+        ]);
+
+        res.json({ entries, total, page, limit, hasMore: skip + entries.length < total });
     } catch (err) {
-        res.status(500).send('Server Error');
+        res.status(500).json({ message: 'Server Error' });
     }
 });
+
 
 // @route   GET /api/entries/work-order-usage/:workOrderNo
 // @desc    Get total historical usage of actualLabour and actualWork for a specific work order across all daily progress reports

@@ -27,15 +27,40 @@ router.post('/', authenticate, async (req, res) => {
     }
 });
 
-// Get all POs
+// Get all POs (paginated)
 router.get('/', authenticate, async (req, res) => {
     try {
-        const pos = await PurchaseOrder.find().populate('indentReferences').sort({ createdAt: -1 });
-        res.status(200).json(pos);
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.max(1, Math.min(200, parseInt(req.query.limit) || 20));
+        const skip = (page - 1) * limit;
+        const search = req.query.search?.trim() || '';
+        const status = req.query.status?.trim() || '';
+
+        const query = {};
+        if (status && status !== 'all') query.materialVerificationStatus = status;
+        if (search) {
+            query.$or = [
+                { poNumber: { $regex: search, $options: 'i' } },
+                { vendorName: { $regex: search, $options: 'i' } },
+                { vendorGst: { $regex: search, $options: 'i' } },
+            ];
+        }
+
+        const [pos, total] = await Promise.all([
+            PurchaseOrder.find(query)
+                .populate('indentReferences')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            PurchaseOrder.countDocuments(query),
+        ]);
+
+        res.status(200).json({ purchaseOrders: pos, total, page, limit, hasMore: skip + pos.length < total });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
+
 
 // Get PO by ID
 router.get('/:id', authenticate, async (req, res) => {

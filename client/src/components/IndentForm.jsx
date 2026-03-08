@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Plus, Trash2, Send, FileText, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Send, FileText, RotateCcw, Search, X } from "lucide-react";
 import SignatureCanvas from "react-signature-canvas";
 import { toast } from "sonner";
 import { createIndent, updateIndent } from "@/services/indentService";
-import { getTasks } from "@/services/taskService";
+import { getTasksAll } from "@/services/taskService";
 import { getSiteLookups } from "@/services/siteLookupService";
 import {
     Select,
@@ -27,12 +27,26 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
     const [siteNames, setSiteNames] = useState([]);
     const [siteEngineers, setSiteEngineers] = useState([]);
     const [materialGroups, setMaterialGroups] = useState([]);
+    const [taskSearch, setTaskSearch] = useState("");
+    const [taskDropdownOpen, setTaskDropdownOpen] = useState(false);
+    const taskDropdownRef = useRef(null);
 
     useEffect(() => {
-        getTasks().then(setTasks).catch(() => { });
+        getTasksAll().then(setTasks).catch(() => { });
         getSiteLookups('siteName').then(d => setSiteNames(d.map(x => x.value))).catch(() => { });
         getSiteLookups('siteEngineer').then(d => setSiteEngineers(d.map(x => x.value))).catch(() => { });
         getSiteLookups('materialGroup').then(d => setMaterialGroups(d.map(x => x.value))).catch(() => { });
+    }, []);
+
+    // Close task dropdown when clicking outside
+    useEffect(() => {
+        const handler = (e) => {
+            if (taskDropdownRef.current && !taskDropdownRef.current.contains(e.target)) {
+                setTaskDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
     }, []);
 
     const storeManagerSigRef = useRef(null);
@@ -228,18 +242,96 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                     <label className="text-sm font-medium text-muted-foreground block mb-2">
                         Task Reference <span className="text-xs text-blue-400 font-normal">— link to a task</span>
                     </label>
-                    <select
-                        value={formData.taskReference}
-                        onChange={(e) => handleInputChange("taskReference", e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg bg-black/20 border border-blue-500/20 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm"
-                    >
-                        <option value="">— No Task Linked —</option>
-                        {tasks.map(t => (
-                            <option key={t._id} value={t.taskId}>
-                                {t.taskId} — {t.workParticulars}
-                            </option>
-                        ))}
-                    </select>
+                    {/* Searchable Task Combobox */}
+                    <div className="relative" ref={taskDropdownRef}>
+                        {/* Trigger button */}
+                        <button
+                            type="button"
+                            onClick={() => { setTaskDropdownOpen(o => !o); setTaskSearch(""); }}
+                            className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-black/20 border border-blue-500/20 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm transition-colors hover:bg-black/30"
+                        >
+                            <span className={formData.taskReference ? "text-foreground" : "text-muted-foreground"}>
+                                {formData.taskReference
+                                    ? (() => { const t = tasks.find(t => t.taskId === formData.taskReference); return t ? `${t.taskId} — ${t.workParticulars}` : formData.taskReference; })()
+                                    : "— No Task Linked —"}
+                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {formData.taskReference && (
+                                    <span
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={(e) => { e.stopPropagation(); handleInputChange("taskReference", ""); }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleInputChange("taskReference", ""); } }}
+                                        className="text-muted-foreground hover:text-red-400 transition-colors"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </span>
+                                )}
+                                <svg className={`w-4 h-4 text-muted-foreground transition-transform ${taskDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+                        </button>
+
+                        {/* Dropdown panel */}
+                        {taskDropdownOpen && (
+                            <div className="absolute z-50 mt-1 w-full rounded-lg bg-[#1a1a2e] border border-blue-500/20 shadow-2xl shadow-black/50 overflow-hidden">
+                                {/* Search input */}
+                                <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
+                                    <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={taskSearch}
+                                        onChange={(e) => setTaskSearch(e.target.value)}
+                                        placeholder="Search task ID or description..."
+                                        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+                                    />
+                                    {taskSearch && (
+                                        <button type="button" onClick={() => setTaskSearch("")} className="text-muted-foreground hover:text-foreground">
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Options list */}
+                                <div className="max-h-52 overflow-y-auto">
+                                    {/* Clear option */}
+                                    <button
+                                        type="button"
+                                        onClick={() => { handleInputChange("taskReference", ""); setTaskDropdownOpen(false); }}
+                                        className="w-full text-left px-4 py-2.5 text-sm text-muted-foreground hover:bg-white/5 transition-colors"
+                                    >
+                                        — No Task Linked —
+                                    </button>
+
+                                    {tasks
+                                        .filter(t => {
+                                            const q = taskSearch.toLowerCase();
+                                            return !q || t.taskId?.toLowerCase().includes(q) || t.workParticulars?.toLowerCase().includes(q);
+                                        })
+                                        .map(t => (
+                                            <button
+                                                key={t._id}
+                                                type="button"
+                                                onClick={() => { handleInputChange("taskReference", t.taskId); setTaskDropdownOpen(false); }}
+                                                className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-blue-500/10 ${formData.taskReference === t.taskId ? 'bg-blue-500/15 text-blue-300' : 'text-foreground'
+                                                    }`}
+                                            >
+                                                <span className="font-medium text-blue-400">{t.taskId}</span>
+                                                <span className="text-muted-foreground ml-2">— {t.workParticulars}</span>
+                                            </button>
+                                        ))
+                                    }
+
+                                    {tasks.filter(t => {
+                                        const q = taskSearch.toLowerCase();
+                                        return !q || t.taskId?.toLowerCase().includes(q) || t.workParticulars?.toLowerCase().includes(q);
+                                    }).length === 0 && (
+                                            <p className="px-4 py-3 text-sm text-muted-foreground text-center">No tasks found</p>
+                                        )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div>

@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import SignaturePad from "@/components/SignaturePad";
 import workOrderService from "@/services/workOrderService";
-import { getTasks } from "@/services/taskService";
+import { getTasksAll } from "@/services/taskService";
 
 const WorkOrderForm = ({ onSuccess, initialData = null }) => {
     const contractorSigRef = useRef(null);
@@ -12,6 +12,9 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
     const supervisorSigRef = useRef(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [tasks, setTasks] = useState([]);
+    const [taskSearch, setTaskSearch] = useState("");
+    const [taskDropdownOpen, setTaskDropdownOpen] = useState(false);
+    const taskDropdownRef = useRef(null);
 
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
@@ -23,6 +26,17 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
         workLocationName: "",
         storeKeeperSupervisorName: "",
     });
+
+    // Close task dropdown when clicking outside
+    useEffect(() => {
+        const handler = (e) => {
+            if (taskDropdownRef.current && !taskDropdownRef.current.contains(e.target)) {
+                setTaskDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
 
     // Populate form data if initialData is provided
     useEffect(() => {
@@ -79,10 +93,7 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
     useEffect(() => {
         const fetchTasksList = async () => {
             try {
-                const fetchedTasks = await getTasks();
-                // Filter for only 'In Progress' or active tasks if needed, 
-                // but let's just show all or pending/in-progress to be safe
-                setTasks(fetchedTasks || []);
+                setTasks(await getTasksAll());
             } catch (error) {
                 console.error("Failed to fetch tasks for dropdown:", error);
                 toast.error("Failed to load task references");
@@ -99,7 +110,7 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
         const updatedItems = [...workItems];
         updatedItems[index][field] = value;
 
-        // Auto-calculate total amount if rate and area are filled
+        // Auto-calculate total amount if rate or area changed (not if user edited totalAmount directly)
         if (field === 'rate' || field === 'workArea') {
             const rate = parseFloat(updatedItems[index].rate) || 0;
             const area = parseFloat(updatedItems[index].workArea) || 0;
@@ -160,7 +171,7 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
         for (let i = 0; i < workItems.length; i++) {
             const item = workItems[i];
             if (!item.workDescription || !item.plannedLabour || !item.workStartDate ||
-                !item.workFinishDate || !item.workArea || !item.rate) {
+                !item.workFinishDate || !item.workArea) {
                 toast.error(`Please fill all fields in work item ${i + 1}`);
                 return;
             }
@@ -266,24 +277,94 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
                     <label className="text-sm font-medium text-muted-foreground block mb-2">
                         Task Reference <span className="text-xs text-blue-400 font-normal">(TK-XXXXXX)</span>
                     </label>
-                    <div className="relative">
-                        <select
-                            value={formData.taskReference}
-                            onChange={(e) => handleInputChange("taskReference", e.target.value)}
-                            className="w-full px-4 py-3 rounded-lg bg-[#1a1b26] border border-blue-500/20 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none pr-10 hover:bg-[#1f202e] transition-colors cursor-pointer"
+                    <div className="relative" ref={taskDropdownRef}>
+                        {/* Trigger button */}
+                        <button
+                            type="button"
+                            onClick={() => { setTaskDropdownOpen(o => !o); setTaskSearch(""); }}
+                            className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-[#1a1b26] border border-blue-500/20 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm transition-colors hover:bg-[#1f202e] cursor-pointer"
                         >
-                            <option value="">Select a Task</option>
-                            {tasks.map((task) => (
-                                <option key={task._id} value={task.taskId}>
-                                    {task.taskId} - {task.workParticulars}
-                                </option>
-                            ))}
-                        </select>
-                        <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-muted-foreground">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </div>
+                            <span className={formData.taskReference ? "text-foreground" : "text-muted-foreground"}>
+                                {formData.taskReference
+                                    ? (() => { const t = tasks.find(t => t.taskId === formData.taskReference); return t ? `${t.taskId} — ${t.workParticulars}` : formData.taskReference; })()
+                                    : "Select a Task"}
+                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {formData.taskReference && (
+                                    <span
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={(e) => { e.stopPropagation(); handleInputChange("taskReference", ""); }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleInputChange("taskReference", ""); } }}
+                                        className="text-muted-foreground hover:text-red-400 transition-colors"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </span>
+                                )}
+                                <svg className={`w-4 h-4 text-muted-foreground transition-transform ${taskDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+                        </button>
+
+                        {/* Dropdown panel */}
+                        {taskDropdownOpen && (
+                            <div className="absolute z-50 mt-1 w-full rounded-lg bg-[#1a1a2e] border border-blue-500/20 shadow-2xl shadow-black/50 overflow-hidden">
+                                {/* Search input */}
+                                <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
+                                    <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={taskSearch}
+                                        onChange={(e) => setTaskSearch(e.target.value)}
+                                        placeholder="Search task ID or description..."
+                                        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+                                    />
+                                    {taskSearch && (
+                                        <button type="button" onClick={() => setTaskSearch("")} className="text-muted-foreground hover:text-foreground">
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Options list */}
+                                <div className="max-h-52 overflow-y-auto">
+                                    {/* Clear option */}
+                                    <button
+                                        type="button"
+                                        onClick={() => { handleInputChange("taskReference", ""); setTaskDropdownOpen(false); }}
+                                        className="w-full text-left px-4 py-2.5 text-sm text-muted-foreground hover:bg-white/5 transition-colors"
+                                    >
+                                        — No Task Linked —
+                                    </button>
+
+                                    {tasks
+                                        .filter(t => {
+                                            const q = taskSearch.toLowerCase();
+                                            return !q || t.taskId?.toLowerCase().includes(q) || t.workParticulars?.toLowerCase().includes(q);
+                                        })
+                                        .map(t => (
+                                            <button
+                                                key={t._id}
+                                                type="button"
+                                                onClick={() => { handleInputChange("taskReference", t.taskId); setTaskDropdownOpen(false); }}
+                                                className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-blue-500/10 ${formData.taskReference === t.taskId ? 'bg-blue-500/15 text-blue-300' : 'text-foreground'
+                                                    }`}
+                                            >
+                                                <span className="font-medium text-blue-400">{t.taskId}</span>
+                                                <span className="text-muted-foreground ml-2">— {t.workParticulars}</span>
+                                            </button>
+                                        ))
+                                    }
+
+                                    {tasks.filter(t => {
+                                        const q = taskSearch.toLowerCase();
+                                        return !q || t.taskId?.toLowerCase().includes(q) || t.workParticulars?.toLowerCase().includes(q);
+                                    }).length === 0 && (
+                                            <p className="px-4 py-3 text-sm text-muted-foreground text-center">No tasks found</p>
+                                        )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -432,9 +513,10 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
                                         <input
                                             type="number"
                                             value={item.totalAmount}
-                                            readOnly
-                                            className="w-full px-2 py-1 rounded bg-white/5 border border-white/10 text-foreground opacity-60"
-                                            placeholder="Auto"
+                                            onChange={(e) => handleWorkItemChange(index, "totalAmount", e.target.value)}
+                                            className="w-full px-2 py-1 rounded bg-white/5 border border-white/10 text-foreground focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+                                            placeholder="Auto / Manual"
+                                            step="0.01"
                                         />
                                     </td>
                                     <td className="p-2">

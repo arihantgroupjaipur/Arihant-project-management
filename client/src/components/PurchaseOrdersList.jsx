@@ -12,6 +12,9 @@ import { useQueryClient } from '@tanstack/react-query';
 
 const PurchaseOrdersList = ({
     purchaseOrders,
+    hasMore,
+    isLoadingMore,
+    onLoadMore,
     onEdit,
     onDelete,
     isAdmin,
@@ -452,6 +455,26 @@ const PurchaseOrdersList = ({
                     </motion.div>
                 ));
             })()}
+
+            {/* Load More Pagination */}
+            {hasMore && onLoadMore && (
+                <div className="p-4 flex justify-center mt-4 border-t border-white/5">
+                    <button
+                        onClick={onLoadMore}
+                        disabled={isLoadingMore}
+                        className="bg-white/5 border border-white/10 hover:bg-white/10 min-w-[200px] px-4 py-2 rounded-xl transition-all flex justify-center items-center text-primary font-medium"
+                    >
+                        {isLoadingMore ? (
+                            <span className="flex items-center gap-2">
+                                <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                                Loading...
+                            </span>
+                        ) : (
+                            'Load More Purchase Orders'
+                        )}
+                    </button>
+                </div>
+            )}
 
             {/* Delete Confirmation Modal */}
             <AnimatePresence>

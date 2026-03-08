@@ -10,15 +10,20 @@ export const createPurchaseOrder = async (data) => {
     }
 };
 
-// Get all Purchase Orders
-export const getPurchaseOrders = async () => {
+// Get all Purchase Orders (paginated)
+export const getPurchaseOrders = async ({ page = 1, limit = 200, search = '', status = '' } = {}) => {
     try {
-        const response = await api.get('/purchase-orders');
-        return response.data;
+        const params = new URLSearchParams();
+        params.set('page', page); params.set('limit', limit);
+        if (search) params.set('search', search);
+        if (status && status !== 'all') params.set('status', status);
+        const response = await api.get(`/purchase-orders?${params.toString()}`);
+        return response.data; // { purchaseOrders, total, hasMore }
     } catch (error) {
         throw new Error(error.response?.data?.message || 'Failed to fetch purchase orders');
     }
 };
+
 
 // Get a single Purchase Order by ID
 export const getPurchaseOrderById = async (id) => {

@@ -26,6 +26,8 @@ import { entryService } from "@/services/entryService";
 import { getPurchaseOrders } from "@/services/purchaseOrderService";
 import MaterialVerificationsList from "@/components/MaterialVerificationsList";
 import { useAuth } from "@/context/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { getTasks } from "@/services/taskService";
 
 const EngineerDashboard = () => {
     const navigate = useNavigate();
@@ -53,6 +55,11 @@ const EngineerDashboard = () => {
     const [materialConsumptionRows, setMaterialConsumptionRows] = useState([
         { materialName: "", totalQuantity: "", unit: "", workOrderReference: "" },
     ]);
+
+    const { data: tasks = [] } = useQuery({
+        queryKey: ['tasks'],
+        queryFn: () => getTasks({ limit: 1000 }).then(res => res.tasks ?? res)
+    });
 
     useEffect(() => {
         loadEntries();
@@ -308,7 +315,7 @@ const EngineerDashboard = () => {
 
                         {activeTab === "indent" && (
                             <div className="glass-card p-6 md:p-8">
-                                <IndentForm onSuccess={() => setActiveTab("history")} />
+                                <IndentForm onSuccess={() => setActiveTab("history")} tasks={tasks} />
                             </div>
                         )}
 

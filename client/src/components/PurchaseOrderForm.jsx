@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Trash2, Save, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
-import { getIndents } from "@/services/indentService";
+import { getIndentsAll } from "@/services/indentService";
 import { createPurchaseOrder, updatePurchaseOrder } from "@/services/purchaseOrderService";
 import siteLookupService from "@/services/siteLookupService";
 import {
@@ -85,10 +85,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
 
     useEffect(() => {
         // Fetch indents to populate dropdown
-        getIndents().then(data => {
-            // Only show verified/approved indents ideally, but for now we'll fetch all or filter if needed
-            setIndents(data);
-        }).catch(err => {
+        getIndentsAll().then(setIndents).catch(err => {
             console.error("Failed to fetch indents for PO form", err);
             toast.error("Failed to load Indents");
         });
@@ -284,8 +281,8 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!formData.poNumber || formData.indentReferences.length === 0 || !formData.vendorName) {
-            toast.error("Please fill in PO Number, Select at least one Indent, and Vendor Name.");
+        if (!formData.poNumber || !formData.vendorName) {
+            toast.error("Please fill in PO Number and Vendor Name.");
             return;
         }
 
@@ -603,14 +600,53 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                                             />
                                         </div>
                                         <div className="col-span-1 border-r border-white/10">
-                                            <input
-                                                type="text"
-                                                className="w-full h-full bg-transparent text-foreground outline-none text-center p-3 placeholder:text-muted-foreground/50 text-sm focus:bg-white/5 transition-colors"
+                                            <select
+                                                className="w-full h-full bg-transparent text-foreground outline-none text-center p-3 placeholder:text-muted-foreground/50 text-sm focus:bg-white/5 transition-colors appearance-none cursor-pointer"
                                                 value={item.unit}
                                                 onChange={(e) => handleItemChange(index, "unit", e.target.value)}
-                                                placeholder="Unit"
                                                 required
-                                            />
+                                            >
+                                                <option value="" className="bg-zinc-900 text-muted-foreground">Select Unit</option>
+                                                <optgroup label="Count" className="bg-zinc-900 text-foreground font-semibold">
+                                                    <option value="Nos" className="font-normal">Nos (Numbers)</option>
+                                                    <option value="Pcs" className="font-normal">Pcs (Pieces)</option>
+                                                    <option value="Set" className="font-normal">Set</option>
+                                                    <option value="Pkt" className="font-normal">Pkt (Packet)</option>
+                                                    <option value="Box" className="font-normal">Box</option>
+                                                    <option value="Bag" className="font-normal">Bag</option>
+                                                    <option value="Roll" className="font-normal">Roll</option>
+                                                </optgroup>
+                                                <optgroup label="Weight" className="bg-zinc-900 text-foreground font-semibold">
+                                                    <option value="Kg" className="font-normal">Kg (Kilogram)</option>
+                                                    <option value="g" className="font-normal">g (Gram)</option>
+                                                    <option value="MT" className="font-normal">MT (Metric Ton)</option>
+                                                    <option value="Ton" className="font-normal">Ton</option>
+                                                    <option value="Quintal" className="font-normal">Quintal (100 Kg)</option>
+                                                    <option value="Lbs" className="font-normal">Lbs (Pounds)</option>
+                                                </optgroup>
+                                                <optgroup label="Length" className="bg-zinc-900 text-foreground font-semibold">
+                                                    <option value="M" className="font-normal">M (Meter)</option>
+                                                    <option value="Cm" className="font-normal">Cm (Centimeter)</option>
+                                                    <option value="Mm" className="font-normal">Mm (Millimeter)</option>
+                                                    <option value="Ft" className="font-normal">Ft (Feet)</option>
+                                                    <option value="Inch" className="font-normal">Inch</option>
+                                                    <option value="Yd" className="font-normal">Yd (Yard)</option>
+                                                </optgroup>
+                                                <optgroup label="Area" className="bg-zinc-900 text-foreground font-semibold">
+                                                    <option value="SqM" className="font-normal">SqM (Square Meter)</option>
+                                                    <option value="SqFt" className="font-normal">SqFt (Square Feet)</option>
+                                                    <option value="SqInch" className="font-normal">SqInch (Square Inch)</option>
+                                                    <option value="Acre" className="font-normal">Acre</option>
+                                                    <option value="Hectare" className="font-normal">Hectare</option>
+                                                </optgroup>
+                                                <optgroup label="Volume" className="bg-zinc-900 text-foreground font-semibold">
+                                                    <option value="Ltr" className="font-normal">Ltr (Liter)</option>
+                                                    <option value="Ml" className="font-normal">Ml (Milliliter)</option>
+                                                    <option value="CuM" className="font-normal">CuM (Cubic Meter)</option>
+                                                    <option value="CFT" className="font-normal">CFT (Cubic Feet)</option>
+                                                    <option value="Gallon" className="font-normal">Gallon</option>
+                                                </optgroup>
+                                            </select>
                                         </div>
                                         <div className="col-span-1 border-r border-white/10">
                                             <input

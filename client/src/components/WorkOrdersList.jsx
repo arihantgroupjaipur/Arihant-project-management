@@ -11,7 +11,7 @@ import { workOrderService } from "@/services/workOrderService";
 import { uploadService } from "@/services/uploadService";
 import { useQueryClient } from "@tanstack/react-query";
 
-const WorkOrdersList = ({ workOrders, onCreateNew, isAdmin = false, onEdit, onDelete, onCreateCertification }) => {
+const WorkOrdersList = ({ workOrders, hasMore, isLoadingMore, onLoadMore, onCreateNew, isAdmin = false, onEdit, onDelete, onCreateCertification, onSuccessUpload }) => {
     const [expandedId, setExpandedId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [uploadingId, setUploadingId] = useState(null);
@@ -23,7 +23,7 @@ const WorkOrdersList = ({ workOrders, onCreateNew, isAdmin = false, onEdit, onDe
         setUploadingId(order._id);
         try {
             await workOrderService.uploadWorkOrderPdf(order._id, file);
-            queryClient.invalidateQueries({ queryKey: ['workOrders'] });
+            if (onSuccessUpload) onSuccessUpload();
             toast.success('PDF uploaded and attached to Work Order!');
         } catch (err) {
             console.error('PDF upload failed:', err);
@@ -46,7 +46,7 @@ const WorkOrdersList = ({ workOrders, onCreateNew, isAdmin = false, onEdit, onDe
         try {
             await uploadService.deleteImage(order.uploadedPdf);
             await workOrderService.removeWorkOrderPdf(order._id);
-            queryClient.invalidateQueries({ queryKey: ['workOrders'] });
+            if (onSuccessUpload) onSuccessUpload();
             toast.success('Attachment removed');
         } catch (err) {
             toast.error('Failed to remove attachment');
@@ -399,6 +399,26 @@ const WorkOrdersList = ({ workOrders, onCreateNew, isAdmin = false, onEdit, onDe
                     </motion.div>
                 ));
             })()}
+
+            {/* Load More Pagination */}
+            {hasMore && onLoadMore && (
+                <div className="p-4 flex justify-center mt-4">
+                    <button
+                        onClick={onLoadMore}
+                        disabled={isLoadingMore}
+                        className="bg-white/5 border border-white/10 hover:bg-white/10 min-w-[150px] px-4 py-2 rounded-xl transition-all flex justify-center items-center"
+                    >
+                        {isLoadingMore ? (
+                            <span className="flex items-center gap-2">
+                                <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                                Loading...
+                            </span>
+                        ) : (
+                            'Load More Work Orders'
+                        )}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

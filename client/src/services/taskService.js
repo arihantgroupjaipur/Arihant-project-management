@@ -1,13 +1,25 @@
 import api from './api';
 
-export const getTasks = async (projectId) => {
+export const getTasks = async ({ page = 1, limit = 20, search = '', status = '' } = {}) => {
     try {
-        const response = await api.get('/tasks');
-        return response.data;
+        const params = new URLSearchParams();
+        params.set('page', page);
+        params.set('limit', limit);
+        if (search) params.set('search', search);
+        if (status && status !== 'all') params.set('status', status);
+        const response = await api.get(`/tasks?${params.toString()}`);
+        return response.data; // { tasks, total, page, limit, hasMore }
     } catch (error) {
         throw error.response?.data?.message || 'Error fetching tasks';
     }
 };
+
+// Convenience helper — returns a plain array of all tasks (for dropdowns, selectors, etc.)
+export const getTasksAll = async () => {
+    const data = await getTasks({ limit: 1000 });
+    return data?.tasks || [];
+};
+
 
 export const createTask = async (taskData) => {
     try {

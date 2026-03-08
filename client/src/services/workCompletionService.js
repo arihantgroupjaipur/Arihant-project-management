@@ -1,11 +1,15 @@
 import api from './api';
 
 export const workCompletionService = {
-    // Get all work completions
-    getAllWorkCompletions: async () => {
-        const response = await api.get('/workcompletions');
-        return response.data;
+    // Get all work completions (paginated)
+    getAllWorkCompletions: async ({ page = 1, limit = 200, search = '' } = {}) => {
+        const params = new URLSearchParams();
+        params.set('page', page); params.set('limit', limit);
+        if (search) params.set('search', search);
+        const response = await api.get(`/workcompletions?${params.toString()}`);
+        return response.data; // { workCompletions, total, hasMore }
     },
+
 
     // Get single work completion by ID
     getWorkCompletionById: async (id) => {

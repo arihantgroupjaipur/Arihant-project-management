@@ -32,7 +32,7 @@ const DailyProgressTable = ({ rows, onChange, onWorkOrderSelect, readOnly = fals
                     workOrderService.getAllWorkOrders(),
                 ]);
                 setAvailableContractors(contractorsData);
-                setWorkOrders(workOrdersData);
+                setWorkOrders(workOrdersData.workOrders || workOrdersData);
             } catch (error) {
                 console.error("Failed to fetch data", error);
             }

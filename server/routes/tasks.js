@@ -3,6 +3,7 @@ import Task from '../models/Task.js';
 import User from '../models/User.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import { sendTaskAssignmentEmail } from '../utils/emailService.js';
+import { syncAllTasksToSheet } from '../utils/googleSheetsService.js';
 
 const router = express.Router();
 
@@ -14,8 +15,8 @@ router.post('/', async (req, res) => {
     try {
         const { workParticulars, contractor, contractorName, plannedStartDate, plannedFinishDate, duration } = req.body;
 
-        if (req.user.role !== 'project_manager' && req.user.role !== 'admin') {
-            return res.status(403).json({ message: 'Access denied. Project Manager role required.' });
+        if (req.user.role !== 'project_manager' && req.user.role !== 'admin' && req.user.role !== 'purchase_manager') {
+            return res.status(403).json({ message: 'Access denied. Project Manager or Purchase Manager role required.' });
         }
 
         if (!workParticulars || (!contractor && !contractorName)) {
@@ -71,28 +72,58 @@ router.post('/', async (req, res) => {
             console.error('Error querying users for task assignment email:', emailErr);
         }
 
+        // --- GOOGLE SHEETS SYNC (Fire & Forget) ---
+        // ON HOLD: syncAllTasksToSheet().catch(err => console.error('Sheet Sync Error:', err));
+
         res.status(201).json(savedTask);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-// Get all tasks
+// Get all tasks (with pagination, search, and status filter)
 router.get('/', async (req, res) => {
     try {
-        // Optionally filter by project manager if they only want to see their own tasks
-        // For now, let's return all tasks or filter by query param if needed
-        // Assuming we want to show all tasks for now or maybe just the ones created by this PM
-        // Let's return all tasks for admins, and only created tasks for PMs?
-        // Requirement was "Project manager ... assign the tasks. and monitor".
-        // It's likely they want to see what they assigned.
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 20));
+        const skip = (page - 1) * limit;
+        const search = req.query.search?.trim() || '';
+        const status = req.query.status?.trim() || '';
 
-        const tasks = await Task.find({})
-            .populate('contractor', 'name') // Assuming Contractor model has a 'name' field
-            .populate('projectManager', 'fullName email')
-            .sort({ createdAt: -1 });
+        // Build query
+        const query = {};
 
-        res.status(200).json(tasks);
+        if (status && status !== 'all') {
+            query.status = status;
+        }
+
+        if (search) {
+            // Try to match taskId prefix first (very fast with index),
+            // then fall back to regex on workParticulars
+            query.$or = [
+                { taskId: { $regex: search, $options: 'i' } },
+                { workParticulars: { $regex: search, $options: 'i' } },
+                { contractorName: { $regex: search, $options: 'i' } },
+            ];
+        }
+
+        const [tasks, total] = await Promise.all([
+            Task.find(query)
+                .populate('contractor', 'name')
+                .populate('projectManager', 'fullName email')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            Task.countDocuments(query),
+        ]);
+
+        res.status(200).json({
+            tasks,
+            total,
+            page,
+            limit,
+            hasMore: skip + tasks.length < total,
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -101,7 +132,7 @@ router.get('/', async (req, res) => {
 // Update a task
 router.put('/:id', async (req, res) => {
     try {
-        if (req.user.role !== 'project_manager' && req.user.role !== 'admin') {
+        if (req.user.role !== 'project_manager' && req.user.role !== 'admin' && req.user.role !== 'purchase_manager') {
             return res.status(403).json({ message: 'Access denied.' });
         }
 
@@ -113,13 +144,15 @@ router.put('/:id', async (req, res) => {
         const { contractor, contractorName, ...otherUpdates } = req.body;
         Object.assign(task, otherUpdates);
 
-        // Handle contractor transition
-        if (contractor) {
-            task.contractor = contractor;
-            task.contractorName = contractorName || '';
-        } else {
-            task.contractor = undefined; // unset ref
-            task.contractorName = contractorName || '';
+        // Only update contractor fields if they were explicitly sent in the request
+        if ('contractor' in req.body || 'contractorName' in req.body) {
+            if (contractor) {
+                task.contractor = contractor;
+                task.contractorName = contractorName || '';
+            } else {
+                task.contractor = undefined; // unset ref
+                task.contractorName = contractorName || '';
+            }
         }
 
         const updatedTask = await task.save();
@@ -127,6 +160,9 @@ router.put('/:id', async (req, res) => {
         // Populate for return
         await updatedTask.populate('contractor', 'name');
         await updatedTask.populate('projectManager', 'fullName email');
+
+        // --- GOOGLE SHEETS SYNC (Fire & Forget) ---
+        // ON HOLD: syncAllTasksToSheet().catch(err => console.error('Sheet Sync Error:', err));
 
         res.status(200).json(updatedTask);
     } catch (error) {
@@ -137,7 +173,7 @@ router.put('/:id', async (req, res) => {
 // Delete a task (admin or project_manager)
 router.delete('/:id', async (req, res) => {
     try {
-        if (req.user.role !== 'admin' && req.user.role !== 'project_manager') {
+        if (req.user.role !== 'admin' && req.user.role !== 'project_manager' && req.user.role !== 'purchase_manager') {
             return res.status(403).json({ message: 'Access denied.' });
         }
 
@@ -152,6 +188,10 @@ router.delete('/:id', async (req, res) => {
         }
 
         await task.deleteOne();
+
+        // --- GOOGLE SHEETS SYNC (Fire & Forget) ---
+        // ON HOLD: syncAllTasksToSheet().catch(err => console.error('Sheet Sync Error:', err));
+
         res.status(200).json({ message: 'Task deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: error.message });

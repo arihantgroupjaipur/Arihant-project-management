@@ -1,37 +1,41 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, Trash2, Upload, X, Image as ImageIcon, Send } from "lucide-react";
+import { Plus, Trash2, Upload, X, Image as ImageIcon, Send, Search } from "lucide-react";
 import { toast } from "sonner";
 import SignaturePad from "@/components/SignaturePad";
 import workCompletionService from "@/services/workCompletionService";
 import { workOrderService } from "@/services/workOrderService";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { uploadService } from "@/services/uploadService";
 import FileUploadSelector from "./FileUploadSelector";
 import { useLocation } from "react-router-dom";
 
+
 const WorkCompletionForm = ({ onSuccess, initialData, sourceWorkOrder: sourceWorkOrderProp }) => {
     const contractorSigRef = useRef(null);
+    const woDropdownRef = useRef(null);
     const [workOrders, setWorkOrders] = useState([]);
+    const [woSearch, setWoSearch] = useState("");
+    const [woDropdownOpen, setWoDropdownOpen] = useState(false);
     const location = useLocation();
 
     useEffect(() => {
-        const fetchWorkOrders = async () => {
-            try {
-                const data = await workOrderService.getAllWorkOrders();
-                setWorkOrders(data);
-            } catch (error) {
+        workOrderService.getWorkOrdersAll()
+            .then(setWorkOrders)
+            .catch((error) => {
                 console.error("Failed to fetch work orders", error);
                 toast.error("Failed to load work orders");
+            });
+    }, []);
+
+    // Close WO dropdown when clicking outside
+    useEffect(() => {
+        const handler = (e) => {
+            if (woDropdownRef.current && !woDropdownRef.current.contains(e.target)) {
+                setWoDropdownOpen(false);
             }
         };
-        fetchWorkOrders();
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
     }, []);
 
     // Pre-fill form when editing
@@ -396,21 +400,94 @@ const WorkCompletionForm = ({ onSuccess, initialData, sourceWorkOrder: sourceWor
                         </div>
                         <div>
                             <label className="text-muted-foreground block mb-1">Work Order No.</label>
-                            <Select
-                                value={formData.workOrderNumber}
-                                onValueChange={handleWorkOrderSelect}
-                            >
-                                <SelectTrigger className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50">
-                                    <SelectValue placeholder="Select Work Order" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Array.isArray(workOrders) && workOrders.map((wo) => (
-                                        <SelectItem key={wo._id} value={wo.workOrderNumber || "unknown"}>
-                                            {wo.workOrderNumber} - {wo.workLocationName}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            {/* Searchable Work Order Combobox */}
+                            <div className="relative" ref={woDropdownRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => { setWoDropdownOpen(o => !o); setWoSearch(""); }}
+                                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-sm transition-colors hover:bg-white/10 cursor-pointer"
+                                >
+                                    <span className={formData.workOrderNumber ? "text-foreground" : "text-muted-foreground"}>
+                                        {formData.workOrderNumber || "Select Work Order"}
+                                    </span>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        {formData.workOrderNumber && (
+                                            <span
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={(e) => { e.stopPropagation(); handleInputChange("workOrderNumber", ""); }}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleInputChange("workOrderNumber", ""); } }}
+                                                className="text-muted-foreground hover:text-red-400 transition-colors"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </span>
+                                        )}
+                                        <svg className={`w-4 h-4 text-muted-foreground transition-transform ${woDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    </div>
+                                </button>
+
+                                {woDropdownOpen && (
+                                    <div className="absolute z-50 mt-1 w-full rounded-lg bg-[#1a1a2e] border border-orange-500/20 shadow-2xl shadow-black/50 overflow-hidden">
+                                        {/* Search */}
+                                        <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
+                                            <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                            <input
+                                                autoFocus
+                                                type="text"
+                                                value={woSearch}
+                                                onChange={(e) => setWoSearch(e.target.value)}
+                                                placeholder="Search work order number or location..."
+                                                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+                                            />
+                                            {woSearch && (
+                                                <button type="button" onClick={() => setWoSearch("")} className="text-muted-foreground hover:text-foreground">
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Options */}
+                                        <div className="max-h-56 overflow-y-auto">
+                                            <button
+                                                type="button"
+                                                onClick={() => { handleInputChange("workOrderNumber", ""); setWoDropdownOpen(false); }}
+                                                className="w-full text-left px-4 py-2.5 text-sm text-muted-foreground hover:bg-white/5 transition-colors"
+                                            >
+                                                — No Work Order —
+                                            </button>
+
+                                            {workOrders
+                                                .filter(wo => {
+                                                    const q = woSearch.toLowerCase();
+                                                    return !q ||
+                                                        wo.workOrderNumber?.toLowerCase().includes(q) ||
+                                                        wo.workLocationName?.toLowerCase().includes(q) ||
+                                                        wo.addressLocation?.toLowerCase().includes(q);
+                                                })
+                                                .map(wo => (
+                                                    <button
+                                                        key={wo._id}
+                                                        type="button"
+                                                        onClick={() => { handleWorkOrderSelect(wo.workOrderNumber); setWoDropdownOpen(false); }}
+                                                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-orange-500/10 ${formData.workOrderNumber === wo.workOrderNumber ? 'bg-orange-500/15 text-orange-300' : 'text-foreground'
+                                                            }`}
+                                                    >
+                                                        <span className="font-medium text-orange-400">{wo.workOrderNumber}</span>
+                                                        {wo.workLocationName && <span className="text-muted-foreground ml-2">— {wo.workLocationName}</span>}
+                                                    </button>
+                                                ))
+                                            }
+
+                                            {workOrders.filter(wo => {
+                                                const q = woSearch.toLowerCase();
+                                                return !q || wo.workOrderNumber?.toLowerCase().includes(q) || wo.workLocationName?.toLowerCase().includes(q) || wo.addressLocation?.toLowerCase().includes(q);
+                                            }).length === 0 && (
+                                                    <p className="px-4 py-3 text-sm text-muted-foreground text-center">No work orders found</p>
+                                                )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

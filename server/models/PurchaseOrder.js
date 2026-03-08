@@ -15,11 +15,9 @@ const purchaseOrderSchema = new mongoose.Schema({
     indentReferences: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Indent',
-        required: true
     }],
     taskReference: {
         type: String,
-        required: true,
         trim: true,
     },
 

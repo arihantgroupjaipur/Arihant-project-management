@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Calendar, Building, MapPin, User, Users, FileText, Sheet, File, Edit, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-const PreviousEntries = ({ entries, onExport, isAdmin, onEdit, onDelete }) => {
+const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport, isAdmin, onEdit, onDelete }) => {
   const [expandedId, setExpandedId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState('');
@@ -241,9 +241,9 @@ const PreviousEntries = ({ entries, onExport, isAdmin, onEdit, onDelete }) => {
                                           <td className="p-3 text-foreground">{report.actualWork || '—'}</td>
                                           <td className="p-3 text-center">
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${report.status === "Completed" ? "bg-green-500/10 text-green-500 border border-green-500/20" :
-                                                report.status === "In Progress" ? "bg-blue-500/10 text-blue-500 border border-blue-500/20" :
-                                                  report.status === "Pending" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20" :
-                                                    "bg-white/5 text-foreground border border-white/10"
+                                              report.status === "In Progress" ? "bg-blue-500/10 text-blue-500 border border-blue-500/20" :
+                                                report.status === "Pending" ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20" :
+                                                  "bg-white/5 text-foreground border border-white/10"
                                               }`}>
                                               {report.status || '—'}
                                             </span>
@@ -300,6 +300,26 @@ const PreviousEntries = ({ entries, onExport, isAdmin, onEdit, onDelete }) => {
           </tbody>
         </table>
       </div>
+
+      {/* Load More Pagination */}
+      {hasMore && onLoadMore && (
+        <div className="p-4 flex justify-center mt-4">
+          <button
+            onClick={onLoadMore}
+            disabled={isLoadingMore}
+            className="bg-white/5 border border-white/10 hover:bg-white/10 min-w-[200px] px-4 py-2 rounded-xl transition-all flex justify-center items-center text-primary font-medium"
+          >
+            {isLoadingMore ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                Loading...
+              </span>
+            ) : (
+              'Load More Entries'
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
