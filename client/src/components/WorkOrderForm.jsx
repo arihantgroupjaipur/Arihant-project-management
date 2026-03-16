@@ -25,6 +25,7 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
         contactPersonName: "",
         workLocationName: "",
         storeKeeperSupervisorName: "",
+        comments: "",
     });
 
     // Close task dropdown when clicking outside
@@ -50,6 +51,7 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
                 contactPersonName: initialData.contactPersonName || "",
                 workLocationName: initialData.workLocationName || "",
                 storeKeeperSupervisorName: initialData.storeKeeperSupervisorName || "",
+                comments: initialData.comments || "",
             });
 
             if (initialData.workItems && initialData.workItems.length > 0) {
@@ -224,7 +226,7 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
                     </h2>
                 </div>
                 <div className="text-center space-y-1 text-xs md:text-sm text-muted-foreground">
-                    <p>2nd Floor, Class Of Pearl, Income Tax Colony, Tank Road, Durgapura, Jaipur, Rajasthan, 302018 (Pan - AAICA5226A)</p>
+                    <p>2nd Floor, Class Of Pearl, Income Tax Colony, Tonk Road, Durgapura, Jaipur, Rajasthan, 302018 (Pan - AAICA5226A)</p>
                     <p>CIN No. U7010RJ2011PLC035322</p>
                 </div>
                 <h3 className="text-xl font-bold text-center mt-4 mb-6">Work Order</h3>
@@ -417,6 +419,18 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
                         onChange={(e) => handleInputChange("storeKeeperSupervisorName", e.target.value)}
                         className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50"
                         placeholder="Enter store keeper & supervisor name"
+                    />
+                </div>
+
+                <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-2">
+                        Comments or Special Instructions
+                    </label>
+                    <textarea
+                        value={formData.comments}
+                        onChange={(e) => handleInputChange("comments", e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50 min-h-[100px]"
+                        placeholder="Enter comments or special instructions"
                     />
                 </div>
             </div>

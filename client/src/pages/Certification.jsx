@@ -315,7 +315,7 @@ const Certification = () => {
                                 </h2>
                             </div>
                             <div className="text-center space-y-1 text-xs md:text-sm text-muted-foreground">
-                                <p>2nd Floor, Class Of Pearl, Income Tax Colony, Tank Road, Durgapura, Jaipur, Rajasthan, 302018 (Pan - AAJCA5226A)</p>
+                                <p>2nd Floor, Class Of Pearl, Income Tax Colony, Tonk Road, Durgapura, Jaipur, Rajasthan, 302018 (Pan - AAJCA5226A)</p>
                                 <p>CIN No. U7010RJ2011PLC035322</p>
                             </div>
                             <h3 className="text-xl font-bold text-center mt-4 mb-6">WORK COMPLETION & QC CERTIFICATION FORM</h3>

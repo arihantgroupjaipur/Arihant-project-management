@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export const generatePurchaseOrderPDF = async (purchaseOrders) => {
@@ -31,8 +31,10 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
             doc.addPage();
         }
 
+        const isRqube = po.shipToCompanyName === "RQUBE BUILDCON PRIVATE LIMITED";
+
         // Add logo at top left
-        if (logoData) {
+        if (logoData && !isRqube) {
             try {
                 doc.addImage(logoData, 'PNG', 15, 10, 25, 25);
             } catch (error) {
@@ -55,7 +57,10 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
         doc.setFontSize(20);
         doc.setTextColor(0);
         doc.setFont('helvetica', 'bold');
-        doc.text('Arihant Dream Infra Projects Ltd.', pageWidth / 2, 25, { align: 'center' });
+        
+        const companyName = isRqube ? 'RQUBE BUILDCON PRIVATE LIMITED' : 'Arihant Dream Infra Projects Ltd.';
+        
+        doc.text(companyName, pageWidth / 2, 25, { align: 'center' });
 
         doc.setFontSize(14);
         doc.text('PURCHASE ORDER', pageWidth / 2, 35, { align: 'center' });
@@ -63,17 +68,32 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
         // Add Company Address on the left
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.text('K-48,206, Class of Pearls', 15, 42);
-        doc.text('Income Tax Colony, Jaipur', 15, 46);
-        doc.text('Phone: 0141-2940606, 9785219777', 15, 50);
-        doc.text('E-mail: accounts@arihantgroupjaipur.com', 15, 54);
-        doc.text('CIN: U7010RJ2011PLC035322', 15, 58);
-        doc.text('GST: 08AANCR4854R1ZB', 15, 62);
+        let yPos = 72; // Declare yPos before it is reassigned
+        
+        if (isRqube) {
+            // RQUBE Details
+            doc.text('K-48,206, Class of Pearls', 15, 42);
+            doc.text('Income Tax Colony, Jaipur', 15, 46);
+            doc.text('Phone: 0141-2940606, 9785219777', 15, 50);
+            doc.text('E-mail: accounts@arihantgroupjaipur.com', 15, 54);
+            doc.text('CIN: U7010RJ2011PLC035322', 15, 58);
+            doc.text('GST: 08AANCR4854R1ZB', 15, 62);
+            // yPos defaults to 72 here
+
+        } else {
+            // Arihant Details
+            doc.text('K-48,206, Class of Pearls', 15, 42);
+            doc.text('Income Tax Colony, Jaipur', 15, 46);
+            doc.text('Phone: 0141-2940606, 9785219777', 15, 50);
+            doc.text('E-mail: accounts@arihantgroupjaipur.com', 15, 54);
+            doc.text('CIN: U7010RJ2011PLC035322', 15, 58);
+            doc.text('GST: 08AANCR4854R1Z3', 15, 62);
+            // yPos defaults to 72 here
+        }
 
         // Entry details
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        let yPos = 72;
 
         const addField = (label, value, x) => {
             doc.setFont('helvetica', 'bold');

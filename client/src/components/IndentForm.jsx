@@ -215,7 +215,7 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                     </h2>
                 </div>
                 <div className="text-center space-y-1 text-xs md:text-sm text-muted-foreground">
-                    <p>2nd Floor, Class Of Pearl, Income Tax Colony, Tank Road, Durgapura, Jaipur, Rajasthan, 302018</p>
+                    <p>2nd Floor, Class Of Pearl, Income Tax Colony, Tonk Road, Durgapura, Jaipur, Rajasthan, 302018</p>
                 </div>
                 <h3 className="text-xl font-bold text-center mt-4 mb-2">
                     {(initialData && initialData._id) ? "EDIT MATERIAL INDENT / SITE REQUIREMENT" : "MATERIAL INDENT / SITE REQUIREMENT FORM"}

@@ -68,7 +68,7 @@ export const generateIndentPDF = async (indents) => {
         doc.text('Phone: 0141-2940606, 9785219777', 15, 50);
         doc.text('E-mail: accounts@arihantgroupjaipur.com', 15, 54);
         doc.text('CIN: U7010RJ2011PLC035322', 15, 58);
-        doc.text('GST: 08AANCR4854R1ZB', 15, 62);
+        doc.text('GST: 08AANCR4854R1Z3', 15, 62);
 
         // Entry details
         doc.setFontSize(10);
@@ -96,7 +96,15 @@ export const generateIndentPDF = async (indents) => {
 
         addField('Site Engineer', indent.siteEngineerName, 20);
         addField('Store Manager', indent.storeManagerName, 120);
-        yPos += 15;
+        yPos += 12;
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('Work Description / Remarks:', 20, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 5;
+        const splitWorkDesc = doc.splitTextToSize(indent.workDescription || 'N/A', pageWidth - 40);
+        doc.text(splitWorkDesc, 20, yPos);
+        yPos += (splitWorkDesc.length * 4) + 10;
 
         // Add Materials header
         doc.setFont('helvetica', 'bold');

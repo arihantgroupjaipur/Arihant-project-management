@@ -71,6 +71,40 @@ const AdminDashboard = () => {
         user?.role === 'purchase_manager' ? 'Purchase Manager' :
           'Site Engineer';
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    // Mount the handler for PurchaseOrdersList
+    window.handleCreateRqubePurchaseOrder = (po, rqubeData) => {
+      // Create a duplicate/template PO for RQUBE based on existing PO
+      const items = po.items?.map(item => ({
+        materialDescription: item.materialDescription || "",
+        unit: item.unit || "",
+        quantity: item.quantity || "",
+        rate: item.rate || "",
+        baseAmount: item.baseAmount || 0,
+        taxRate: item.taxRate || "18",
+        taxAmount: item.taxAmount || 0,
+        amount: item.amount || 0
+      })) || [];
+
+      setEditingPurchaseOrder({
+        indentReferences: po.indentReferences || [],
+        taskReference: po.taskReference || "",
+        vendorName: po.vendorName || "",
+        vendorAddress: po.vendorAddress || "",
+        vendorGst: po.vendorGst || "",
+        vendorContactNo: po.vendorContactNo || "",
+        ...rqubeData,
+        items
+      });
+      setShowPurchaseOrderForm(true);
+      setActiveTab('purchase-order');
+    };
+
+    return () => {
+      delete window.handleCreateRqubePurchaseOrder;
+    };
+  }, []);
   const location = useLocation();
   const activeTab = location.hash.replace('#', '') || 'tasks';
   const setActiveTab = (tab) => navigate(`#${tab}`, { replace: true });
@@ -975,11 +1009,25 @@ const AdminDashboard = () => {
             )}
 
             {activeTab === 'purchase-order' && !showPurchaseOrderForm && (
-              <Button onClick={() => setShowPurchaseOrderForm(true)} size="sm" className="gap-2 text-xs md:text-sm">
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">New Purchase Order</span>
-                <span className="sm:hidden">New</span>
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => setShowPurchaseOrderForm(true)} size="sm" className="gap-2 text-xs md:text-sm">
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">New Purchase Order</span>
+                  <span className="sm:hidden">New PO</span>
+                </Button>
+                <Button onClick={() => {
+                  setEditingPurchaseOrder({
+                    shipToCompanyName: "RQUBE BUILDCON PRIVATE LIMITED",
+                    termsAndConditions: "Billing must be in Name of \"RQUBE BUILDCON PRIVATE LIMITED\"\nMaterial Should Reach On Site Before 5:45 PM\nMaterial Delivery Date : Next day of payment.\nProperly Signed challan and MRN's Should be attached with bill at the time of submission.\nMaterial Found defective to be replaced at no additional cost to the purchaser."
+                  });
+                  setShowPurchaseOrderForm(true);
+                  setActiveTab('purchase-order');
+                }} size="sm" className="gap-2 text-xs md:text-sm bg-purple-600 hover:bg-purple-700 text-white border-none">
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">RQUBE</span>
+                  <span className="sm:hidden">RQUBE</span>
+                </Button>
+              </div>
             )}
 
             {activeTab === 'workorder' && !showWorkOrderForm && (

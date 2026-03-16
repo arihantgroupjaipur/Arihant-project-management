@@ -73,6 +73,7 @@ router.post('/', authMiddleware, async (req, res) => {
             contactPersonName,
             workLocationName,
             storeKeeperSupervisorName,
+            comments,
             workItems,
             signatures,
         } = req.body;
@@ -91,6 +92,7 @@ router.post('/', authMiddleware, async (req, res) => {
             contactPersonName,
             workLocationName,
             storeKeeperSupervisorName,
+            comments,
             workItems,
             signatures,
             createdBy: req.user.id,
@@ -118,6 +120,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
             contactPersonName,
             workLocationName,
             storeKeeperSupervisorName,
+            comments,
             workItems,
             signatures,
             uploadedPdf,
@@ -144,6 +147,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
         workOrder.contactPersonName = contactPersonName;
         workOrder.workLocationName = workLocationName;
         workOrder.storeKeeperSupervisorName = storeKeeperSupervisorName;
+        if (comments !== undefined) workOrder.comments = comments;
         workOrder.workItems = workItems;
         workOrder.signatures = signatures;
         if (uploadedPdf !== undefined) workOrder.uploadedPdf = uploadedPdf;

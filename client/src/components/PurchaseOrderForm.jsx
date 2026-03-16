@@ -57,7 +57,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
         // Summary Info
         freight: "",
         comments: "",
-        termsAndConditions: "Billing must be in Name of \"RQUBE BUILDCON PRIVATE LIMITED\"\nMaterial Should Reach On Site Before 5:45 PM\nMaterial Delivery Date : Next day of payment.\nProperly Signed challan and MRN's Should be attached with bill at the time of submission.\nMaterial Found defective to be replaced at no additional cost to the purchaser.",
+        termsAndConditions: "Billing must be in Name of \"ARIHANT DREAM INFRA PROJECTS LTD\"\nMaterial Should Reach On Site Before 5:45 PM\nMaterial Delivery Date : Next day of payment.\nProperly Signed challan and MRN's Should be attached with bill at the time of submission.\nMaterial Found defective to be replaced at no additional cost to the purchaser.",
 
         // Authorizations
         preparedBy: "",
@@ -116,7 +116,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
 
                 freight: initialData.freight ?? "",
                 comments: initialData.comments || "",
-                termsAndConditions: initialData.termsAndConditions || "Billing must be in Name of \"RQUBE BUILDCON PRIVATE LIMITED\"\nMaterial Should Reach On Site Before 5:45 PM\nMaterial Delivery Date : Next day of payment.\nProperly Signed challan and MRN's Should be attached with bill at the time of submission.\nMaterial Found defective to be replaced at no additional cost to the purchaser.",
+                termsAndConditions: initialData.termsAndConditions || "Billing must be in Name of \"ARIHANT DREAM INFRA PROJECTS LTD\"\nMaterial Should Reach On Site Before 5:45 PM\nMaterial Delivery Date : Next day of payment.\nProperly Signed challan and MRN's Should be attached with bill at the time of submission.\nMaterial Found defective to be replaced at no additional cost to the purchaser.",
 
                 preparedBy: initialData.preparedBy || "",
                 verifiedBy: initialData.verifiedBy || "",

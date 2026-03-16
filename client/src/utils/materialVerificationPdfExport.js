@@ -49,7 +49,7 @@ export const generateMaterialVerificationPdf = async (pos, showLogo = true) => {
             yPos += 12;
             doc.setFontSize(7);
             doc.setFont("helvetica", "normal");
-            const addressLine1 = '2nd Floor, Class Of Pearl, Income Tax Colony, Tank Road, Durgapura, Jaipur, Rajasthan, 302018 (Pan - AAJCA5226A)';
+            const addressLine1 = '2nd Floor, Class Of Pearl, Income Tax Colony, Tonk Road, Durgapura, Jaipur, Rajasthan, 302018 (Pan - AAJCA5226A)';
             doc.text(addressLine1, pageWidth / 2, yPos, { align: "center" });
 
             yPos += 4;

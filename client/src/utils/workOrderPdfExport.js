@@ -39,13 +39,22 @@ export const generateWorkOrderPDF = async (workOrder) => {
     // Company Header - Title (centered)
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
-    doc.text('Arihant Dream Infra Projects Ltd. Jaipur', pageWidth / 2, yPos + 6, { align: 'center' });
+    
+    let isRqube = false;
+    if (workOrder.shipToCompanyName === "RQUBE BUILDCON PRIVATE LIMITED" || 
+        workOrder.contactPersonName === "RQUBE BUILDCON PRIVATE LIMITED" ||
+        workOrder.addressLocation === "RQUBE") {
+        isRqube = true;
+    }
+
+    const companyName = isRqube ? 'RQUBE BUILDCON PRIVATE LIMITED' : 'Arihant Dream Infra Projects Ltd. Jaipur';
+    doc.text(companyName, pageWidth / 2, yPos + 6, { align: 'center' });
 
     // Company Address
     yPos += 12;
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    const addressLine1 = '2nd Floor, Class Of Pearl, Income Tax Colony, Tank Road, Durgapura, Jaipur, Rajasthan, 302018 (Pan - AAJCA5226A)';
+    const addressLine1 = '2nd Floor, Class Of Pearl, Income Tax Colony, Tonk Road, Durgapura, Jaipur, Rajasthan, 302018 (Pan - AAJCA5226A)';
     doc.text(addressLine1, pageWidth / 2, yPos, { align: 'center' });
 
     yPos += 4;
@@ -103,6 +112,7 @@ export const generateWorkOrderPDF = async (workOrder) => {
     yPos = drawField('Contact Person Name', workOrder.contactPersonName || '', yPos);
     yPos = drawField('Work Location Name', workOrder.workLocationName || '', yPos);
     yPos = drawField('Store Keeper & Supervisor Name', workOrder.storeKeeperSupervisorName || '', yPos);
+    yPos = drawField('Comments / Special Instr.', workOrder.comments || '', yPos);
 
     // Work Items Table
     yPos += 5;
