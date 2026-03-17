@@ -87,7 +87,7 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
             doc.text('Phone: 0141-2940606, 9785219777', 15, 50);
             doc.text('E-mail: accounts@arihantgroupjaipur.com', 15, 54);
             doc.text('CIN: U7010RJ2011PLC035322', 15, 58);
-            doc.text('GST: 08AANCR4854R1Z3', 15, 62);
+            doc.text('GST: 08AAJCA5226A1Z3', 15, 62);
             // yPos defaults to 72 here
         }
 
@@ -203,7 +203,7 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
         doc.text(Number(po.subTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }), rightAlignX, yPos, { align: 'right' });
         yPos += 6;
 
-        doc.text('Freight:', rightAlignX - totalW - 5, yPos, { align: 'right' });
+        doc.text('Round off:', rightAlignX - totalW - 5, yPos, { align: 'right' });
         doc.text(Number(po.freight || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }), rightAlignX, yPos, { align: 'right' });
         yPos += 6;
 

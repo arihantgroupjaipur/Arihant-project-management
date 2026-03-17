@@ -7,7 +7,7 @@ export const generatePurchaseOrderCSV = (purchaseOrders) => {
         'PO Number', 'Date', 'Status', 'Indent Reference', 'Task Reference',
         'Vendor Name', 'Vendor Address', 'Vendor GST', 'Vendor Contact',
         'Ship To Company', 'Ship To Address', 'Ship To Person', 'Ship To Contact',
-        'Subtotal', 'Freight', 'Grand Total', 'Comments',
+        'Subtotal', 'Round off', 'Grand Total', 'Comments',
         'Prepared By', 'Requisitioned By', 'Verified By', 'Authorized By',
         'Item Description', 'Unit', 'QTY', 'Rate', 'Base', 'Tax', 'Amount'
     ];

@@ -274,8 +274,16 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
         return items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
     };
 
-    const calculateTotalAmount = () => {
-        return calculateSubTotal() + (Number(formData.freight) || 0);
+    const calculateRoundedTotal = () => {
+        const subTotal = calculateSubTotal();
+        return Math.round(subTotal);
+    };
+
+    const calculateRoundOff = () => {
+        const subTotal = calculateSubTotal();
+        const roundedTotal = calculateRoundedTotal();
+        // Keep round-off to 2 decimals for display/storage consistency
+        return Math.round((roundedTotal - subTotal) * 100) / 100;
     };
 
     const handleSubmit = async (e) => {
@@ -327,7 +335,9 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                 ...urls,
                 items: validItems,
                 subTotal: calculateSubTotal(),
-                totalAmount: calculateTotalAmount()
+                // Reuse existing `freight` field in backend as "Round off"
+                freight: calculateRoundOff(),
+                totalAmount: calculateRoundedTotal()
             };
 
             if (initialData && initialData._id) {
@@ -767,15 +777,14 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                             <span className="text-sm font-medium text-foreground">₹{calculateSubTotal().toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div className="flex justify-between items-center py-2 px-4 bg-white/5 rounded-lg border border-primary/20">
-                            <label className="text-sm text-muted-foreground">Freight</label>
+                            <label className="text-sm text-muted-foreground">Round off</label>
                             <div className="flex items-center gap-2">
                                 <span className="text-sm text-muted-foreground">₹</span>
                                 <input
                                     type="number"
-                                    min="0"
                                     step="0.01"
-                                    value={formData.freight}
-                                    onChange={(e) => handleInputChange("freight", e.target.value)}
+                                    value={calculateRoundOff()}
+                                    readOnly
                                     className="w-24 bg-transparent border-b border-white/20 px-1 py-0.5 text-right text-sm focus:outline-none focus:border-primary text-foreground"
                                 />
                             </div>
@@ -783,7 +792,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                         <div className="flex justify-between items-center py-3 px-4 bg-primary/20 rounded-lg mt-2">
                             <span className="text-sm font-bold text-primary">TOTAL</span>
                             <span className="text-xl font-bold text-gradient-primary">
-                                ₹{calculateTotalAmount().toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ₹{calculateRoundedTotal().toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                             </span>
                         </div>
                     </div>

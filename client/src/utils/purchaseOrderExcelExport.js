@@ -27,7 +27,7 @@ export const generatePurchaseOrderExcel = (purchaseOrders) => {
                     'Ship To Person': po.shipToContactPerson || '',
                     'Ship To Contact': po.shipToContactNo || '',
                     'Subtotal (₹)': po.subTotal || 0,
-                    'Freight (₹)': po.freight || 0,
+                    'Round off (₹)': po.freight || 0,
                     'Grand Total (₹)': po.totalAmount || 0,
                     'Comments': po.comments || '',
                     'Prepared By': po.preparedBy || '',

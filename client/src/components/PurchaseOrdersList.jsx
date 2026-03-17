@@ -336,7 +336,7 @@ const PurchaseOrdersList = ({
                                                                 <td className="py-3 px-4 text-right font-medium text-foreground">₹{Number(po.subTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                             </tr>
                                                             <tr>
-                                                                <td colSpan="5" className="py-2 px-4 text-right font-medium text-muted-foreground uppercase text-xs tracking-wider border-none">Freight</td>
+                                                                <td colSpan="5" className="py-2 px-4 text-right font-medium text-muted-foreground uppercase text-xs tracking-wider border-none">Round off</td>
                                                                 <td className="py-2 px-4 text-right font-medium text-foreground border-none">₹{Number(po.freight).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                             </tr>
                                                             <tr className="border-t border-white/10">
