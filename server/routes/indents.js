@@ -1,4 +1,6 @@
 import express from 'express';
+import { syncAllIndentsToSheet } from '../utils/googleSheetsService.js';
+import { logActivity } from '../utils/activityLogger.js';
 import multer from 'multer';
 import multerS3 from 'multer-s3';
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
@@ -71,7 +73,8 @@ router.post('/', authenticate, async (req, res) => {
         });
 
         const savedIndent = await newIndent.save();
-        // Fire notification (non-blocking)        
+        syncAllIndentsToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('CREATE', 'Indent', `Indent created: ${savedIndent.indentNumber}`, req.user?.email, savedIndent.indentNumber);
         res.status(201).json(savedIndent);
     } catch (error) {
         console.error("Error creating indent:", error);
@@ -128,7 +131,7 @@ router.get('/', authenticate, async (req, res) => {
 // Update an Indent
 router.put('/:id', authenticate, async (req, res) => {
     try {
-        if (req.user.role !== 'admin') {
+        if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
             return res.status(403).json({ message: 'Access denied. Only admins can edit indents.' });
         }
 
@@ -141,6 +144,8 @@ router.put('/:id', authenticate, async (req, res) => {
             return res.status(404).json({ message: 'Indent not found' });
         }
 
+        syncAllIndentsToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('UPDATE', 'Indent', `Indent updated: ${updatedIndent.indentNumber}`, req.user?.email, updatedIndent.indentNumber);
         res.json(updatedIndent);
     } catch (error) {
         console.error("Error updating indent:", error);
@@ -151,7 +156,7 @@ router.put('/:id', authenticate, async (req, res) => {
 // Verify an Indent
 router.put('/:id/verify', authenticate, upload.single('verifiedPdf'), async (req, res) => {
     try {
-        if (req.user.role !== 'admin' && req.user.role !== 'purchase_manager') {
+        if (req.user.role !== 'admin' && req.user.role !== 'super-admin' && req.user.role !== 'purchase_manager') {
             return res.status(403).json({ message: 'Access denied. Only admins or purchase managers can verify indents.' });
         }
 
@@ -186,6 +191,7 @@ router.put('/:id/verify', authenticate, upload.single('verifiedPdf'), async (req
             return res.status(404).json({ message: 'Indent not found' });
         }
 
+        syncAllIndentsToSheet().catch(err => console.error('Sheet Sync Error:', err));
         res.json(updatedIndent);
     } catch (error) {
         console.error("Error verifying indent:", error);
@@ -196,7 +202,7 @@ router.put('/:id/verify', authenticate, upload.single('verifiedPdf'), async (req
 // Delete an Indent
 router.delete('/:id', authenticate, async (req, res) => {
     try {
-        if (req.user.role !== 'admin') {
+        if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
             return res.status(403).json({ message: 'Access denied. Only admins can delete indents.' });
         }
 
@@ -207,6 +213,8 @@ router.delete('/:id', authenticate, async (req, res) => {
             return res.status(404).json({ message: 'Indent not found' });
         }
 
+        syncAllIndentsToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('DELETE', 'Indent', `Indent deleted: ${deletedIndent.indentNumber}`, req.user?.email, deletedIndent.indentNumber);
         res.json({ message: 'Indent deleted successfully' });
     } catch (error) {
         console.error("Error deleting indent:", error);

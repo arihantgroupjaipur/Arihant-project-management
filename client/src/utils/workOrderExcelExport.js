@@ -1,5 +1,18 @@
 import * as XLSX from 'xlsx';
 
+const fmtTs = (d) => {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (isNaN(dt)) return '';
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const mm = String(dt.getMonth()+1).padStart(2,'0');
+    const yyyy = dt.getFullYear();
+    const hh = String(dt.getHours()).padStart(2,'0');
+    const min = String(dt.getMinutes()).padStart(2,'0');
+    const ss = String(dt.getSeconds()).padStart(2,'0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+};
+
 export const generateWorkOrderExcel = (workOrder) => {
     if (!workOrder) {
         throw new Error('No work order to export');
@@ -17,7 +30,7 @@ export const generateWorkOrderExcel = (workOrder) => {
         ['WORK ORDER'],
         [''],
         ['Work Order Number:', workOrder.workOrderNumber],
-        ['Date:', new Date(workOrder.date).toLocaleDateString('en-GB')],
+        ['Date:', fmtTs(workOrder.createdAt || workOrder.date)],
         ['Main Work Order Reference:', workOrder.mainWorkOrderReference || ''],
         ['Address/Location:', workOrder.addressLocation || ''],
         ['Contact Person Name:', workOrder.contactPersonName || ''],

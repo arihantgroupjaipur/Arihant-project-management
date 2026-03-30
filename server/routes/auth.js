@@ -6,6 +6,8 @@ import passport from 'passport';
 const router = express.Router();
 
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/emailService.js';
+import { logActivity } from '../utils/activityLogger.js';
+import ActiveSession from '../models/ActiveSession.js';
 
 // @route   POST /api/auth/register
 // @desc    Register new user
@@ -36,6 +38,7 @@ router.post('/register', async (req, res) => {
         });
 
         await user.save();
+        logActivity('OTHER', 'Auth', `New user registered: ${email} (role: ${role})`, email, email);
         try {
             await sendVerificationEmail(email, otp);
             res.json({ message: 'Registration successful. Please check your email for verification OTP.' });
@@ -143,6 +146,12 @@ router.post('/login', async (req, res) => {
             email: user.email
         };
 
+        logActivity('LOGIN', 'Auth', `User logged in: ${user.email} (role: ${user.role})`, user.email, user.email);
+        ActiveSession.findOneAndUpdate(
+            { userId: user._id },
+            { userId: user._id, email: user.email, fullName: user.fullName, role: user.role, loginAt: new Date() },
+            { upsert: true, new: true }
+        ).catch(err => console.error('[Session] upsert error:', err.message));
         jwt.sign(
             payload,
             process.env.JWT_SECRET || 'secret_key_123',
@@ -212,6 +221,7 @@ router.post('/reset-password', async (req, res) => {
         user.isVerified = true; // Auto-verify email on password reset
         await user.save();
 
+        logActivity('OTHER', 'Auth', `Password reset for: ${email}`, email, email);
         res.json({ message: 'Password reset successful. You can now login.' });
 
     } catch (err) {
@@ -220,6 +230,24 @@ router.post('/reset-password', async (req, res) => {
     }
 });
 
+
+// @route   POST /api/auth/logout
+// @desc    Log user logout
+// @access  Private
+router.post('/logout', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key_123');
+            logActivity('OTHER', 'Auth', `User logged out: ${decoded.email} (role: ${decoded.role})`, decoded.email, decoded.email);
+            ActiveSession.findOneAndDelete({ userId: decoded.id }).catch(() => {});
+        }
+    } catch {
+        // token invalid/expired — still fine, just don't log
+    }
+    res.json({ message: 'Logged out' });
+});
 
 // @route   GET /api/auth/google
 // @desc    Auth with Google
@@ -251,6 +279,12 @@ router.get('/google/callback',
             email: req.user.email
         };
 
+        logActivity('LOGIN', 'Auth', `User logged in via Google: ${req.user.email} (role: ${req.user.role})`, req.user.email, req.user.email);
+        ActiveSession.findOneAndUpdate(
+            { userId: req.user.id },
+            { userId: req.user.id, email: req.user.email, fullName: req.user.fullName, role: req.user.role, loginAt: new Date() },
+            { upsert: true, new: true }
+        ).catch(err => console.error('[Session] upsert error:', err.message));
         jwt.sign(
             payload,
             process.env.JWT_SECRET || 'secret_key_123',
@@ -301,6 +335,12 @@ router.get('/github/callback',
             email: req.user.email
         };
 
+        logActivity('LOGIN', 'Auth', `User logged in via GitHub: ${req.user.email} (role: ${req.user.role})`, req.user.email, req.user.email);
+        ActiveSession.findOneAndUpdate(
+            { userId: req.user.id },
+            { userId: req.user.id, email: req.user.email, fullName: req.user.fullName, role: req.user.role, loginAt: new Date() },
+            { upsert: true, new: true }
+        ).catch(err => console.error('[Session] upsert error:', err.message));
         jwt.sign(
             payload,
             process.env.JWT_SECRET || 'secret_key_123',

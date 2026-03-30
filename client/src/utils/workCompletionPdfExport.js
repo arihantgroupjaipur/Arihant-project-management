@@ -1,6 +1,19 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+const fmtTs = (d) => {
+    if (!d) return '—';
+    const dt = new Date(d);
+    if (isNaN(dt)) return '—';
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const mm = String(dt.getMonth()+1).padStart(2,'0');
+    const yyyy = dt.getFullYear();
+    const hh = String(dt.getHours()).padStart(2,'0');
+    const min = String(dt.getMinutes()).padStart(2,'0');
+    const ss = String(dt.getSeconds()).padStart(2,'0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+};
+
 export const generateWorkCompletionPDF = async (completion) => {
     if (!completion) {
         throw new Error('No work completion to export');
@@ -67,7 +80,7 @@ export const generateWorkCompletionPDF = async (completion) => {
     doc.setFont('helvetica', 'bold');
     doc.text('Date', pageWidth - 60, yPos);
     doc.setFont('helvetica', 'normal');
-    const formattedDate = new Date(completion.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const formattedDate = fmtTs(completion.createdAt || completion.date);
     doc.text(`: ${formattedDate}`, pageWidth - 45, yPos);
 
     yPos += 5;

@@ -5,6 +5,7 @@ import Otp from '../models/Otp.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import adminMiddleware from '../middleware/adminMiddleware.js';
 import { sendStatusChangeEmail, sendVerificationEmail } from '../utils/emailService.js';
+import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 
@@ -107,6 +108,7 @@ router.post('/', async (req, res) => {
         const userObj = user.toObject();
         delete userObj.password;
 
+        logActivity('CREATE', 'User', `User created: ${email} (role: ${role})`, req.user?.email, email);
         res.json(userObj);
     } catch (err) {
         console.error(err.message);
@@ -124,6 +126,11 @@ router.put('/:id', async (req, res) => {
         let user = await User.findById(req.params.id);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Only super-admin can modify another super-admin
+        if (user.role === 'super-admin' && req.user.role !== 'super-admin') {
+            return res.status(403).json({ message: 'Access denied. Cannot modify a Super Admin account.' });
         }
 
         // Track status changes to dispatch email
@@ -162,6 +169,10 @@ router.put('/:id', async (req, res) => {
         const userObj = user.toObject();
         delete userObj.password;
 
+        const desc = statusChanged
+            ? `User status changed to "${user.status}" for: ${user.email}`
+            : `User updated: ${user.email} (role: ${user.role})`;
+        logActivity('UPDATE', 'User', desc, req.user?.email, user.email);
         res.json(userObj);
     } catch (err) {
         console.error(err.message);
@@ -184,7 +195,13 @@ router.delete('/:id', async (req, res) => {
             return res.status(400).json({ message: 'Cannot delete your own account' });
         }
 
+        // Only super-admin can delete another super-admin
+        if (user.role === 'super-admin' && req.user.role !== 'super-admin') {
+            return res.status(403).json({ message: 'Access denied. Cannot delete a Super Admin account.' });
+        }
+
         await User.findByIdAndDelete(req.params.id);
+        logActivity('DELETE', 'User', `User deleted: ${user.email} (role: ${user.role})`, req.user?.email, user.email);
         res.json({ message: 'User removed' });
     } catch (err) {
         console.error(err.message);

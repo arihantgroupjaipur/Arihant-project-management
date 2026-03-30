@@ -1,5 +1,18 @@
 import * as XLSX from 'xlsx';
 
+const fmtTs = (d) => {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (isNaN(dt)) return '';
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const mm = String(dt.getMonth()+1).padStart(2,'0');
+    const yyyy = dt.getFullYear();
+    const hh = String(dt.getHours()).padStart(2,'0');
+    const min = String(dt.getMinutes()).padStart(2,'0');
+    const ss = String(dt.getSeconds()).padStart(2,'0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+};
+
 export const generateWorkCompletionExcel = (completion) => {
     if (!completion) {
         throw new Error('No work completion to export');
@@ -13,7 +26,7 @@ export const generateWorkCompletionExcel = (completion) => {
         ['WORK COMPLETION & QC CERTIFICATION FORM'],
         ['Arihant Dream Infra Projects Ltd. Jaipur'],
         [],
-        ['Date', new Date(completion.date).toLocaleDateString('en-GB')],
+        ['Date', fmtTs(completion.createdAt || completion.date)],
         ['Work Order No.', completion.workOrderNumber],
         [],
         ['Block / Tower', completion.blockTower],

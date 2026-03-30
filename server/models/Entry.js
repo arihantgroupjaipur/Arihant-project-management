@@ -17,6 +17,7 @@ const entrySchema = new mongoose.Schema({
     dailyProgressReports: [{
         contractorName: { type: String, default: '' },
         workOrderNo: { type: String, default: '' },
+        workName: { type: String, default: '' },
         plannedLabour: { type: Number, default: 0 },
         actualLabour: { type: Number, default: 0 },
         plannedWork: { type: String, default: '' },
@@ -25,9 +26,12 @@ const entrySchema = new mongoose.Schema({
     }],
     materialConsumption: [{
         materialName: { type: String, required: true },
-        totalQuantity: { type: Number, required: true },
-        unit: { type: String, required: true },
+        totalQuantity: { type: Number, default: 0 },
+        usedTotalQty: { type: Number, default: 0 },
+        unit: { type: String, default: '' },
         workOrderReference: { type: String, default: '' },
+        plannedWorkArea: { type: Number, default: 0 },
+        actualWorkArea: { type: Number, default: 0 },
     }],
 }, { timestamps: true });
 

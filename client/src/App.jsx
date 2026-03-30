@@ -21,6 +21,7 @@ import ProjectManagerRoute from "@/components/ProjectManagerRoute";
 import PurchaseManagerRoute from "@/components/PurchaseManagerRoute";
 import AccountManagerRoute from "@/components/AccountManagerRoute";
 import EngineerRoute from "@/components/EngineerRoute";
+import SuperAdminRoute from "@/components/SuperAdminRoute";
 import AuthCallback from "./pages/AuthCallback";
 import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -82,6 +83,11 @@ const App = () => (
               <AccountManagerRoute>
                 <AccountDashboard />
               </AccountManagerRoute>
+            } />
+            <Route path="/super-admin" element={
+              <SuperAdminRoute>
+                <AdminDashboard />
+              </SuperAdminRoute>
             } />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

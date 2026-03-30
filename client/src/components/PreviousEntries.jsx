@@ -2,6 +2,19 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Calendar, Building, MapPin, User, Users, FileText, Sheet, File, Edit, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+const formatTimestamp = (ts) => {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  if (isNaN(d)) return '—';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+};
+
 const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport, isAdmin, onEdit, onDelete }) => {
   const [expandedId, setExpandedId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -12,7 +25,7 @@ const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h3 className="text-xl md:text-2xl font-bold text-foreground">Daily Labour Deployments</h3>
+          <h3 className="text-xl md:text-2xl font-bold text-foreground">Daily Progress Reports</h3>
           <p className="text-muted-foreground text-sm">Track all daily labour deployments across projects</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -51,12 +64,13 @@ const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport
 
       {/* Table */}
       <div className="border rounded-xl border-white/10 overflow-hidden overflow-x-auto">
-        <table className="w-full text-sm text-left min-w-[700px]">
+        <table className="w-full text-sm text-left min-w-[900px]">
           <thead className="bg-white/5 text-muted-foreground font-medium uppercase text-xs">
             <tr>
               <th className="p-4 whitespace-nowrap">Project</th>
               <th className="p-4 whitespace-nowrap">Date</th>
               <th className="p-4 whitespace-nowrap">Location</th>
+              <th className="p-4 whitespace-nowrap">Work Names</th>
               <th className="p-4 whitespace-nowrap">Supervisor</th>
               <th className="p-4 whitespace-nowrap text-center">Total Workers</th>
               <th className="p-4 whitespace-nowrap text-right">Actions</th>
@@ -67,7 +81,7 @@ const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport
               if (!entries || entries.length === 0) {
                 return (
                   <tr>
-                    <td colSpan="6" className="p-8 text-center text-muted-foreground">
+                    <td colSpan="7" className="p-8 text-center text-muted-foreground">
                       No daily deployment entries yet.
                     </td>
                   </tr>
@@ -88,7 +102,7 @@ const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport
               if (filtered.length === 0) {
                 return (
                   <tr>
-                    <td colSpan="6" className="p-8 text-center text-muted-foreground">
+                    <td colSpan="7" className="p-8 text-center text-muted-foreground">
                       No entries match your search.
                     </td>
                   </tr>
@@ -113,7 +127,7 @@ const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport
                     <td className="p-4 text-muted-foreground">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5" />
-                        {entry.date}
+                        {formatTimestamp(entry.createdAt)}
                       </div>
                     </td>
                     <td className="p-4 text-muted-foreground">
@@ -121,6 +135,12 @@ const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport
                         <MapPin className="w-3.5 h-3.5" />
                         {entry.location}
                       </div>
+                    </td>
+                    <td className="p-4 text-foreground text-xs max-w-[180px]">
+                      {(() => {
+                        const names = [...new Set((entry.dailyProgressReports || []).map(r => r.workName).filter(Boolean))];
+                        return names.length > 0 ? names.join(', ') : <span className="text-muted-foreground">—</span>;
+                      })()}
                     </td>
                     <td className="p-4 text-muted-foreground">
                       <div className="flex items-center gap-1.5">
@@ -204,7 +224,7 @@ const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport
                   <AnimatePresence>
                     {expandedId === entry._id && (
                       <tr key={`${entry._id}-expanded`}>
-                        <td colSpan="6" className="p-0 bg-white/2">
+                        <td colSpan="7" className="p-0 bg-white/2">
                           <motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: "auto", opacity: 1 }}
@@ -223,6 +243,7 @@ const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport
                                       <tr>
                                         <th className="p-3 text-left">Contractor</th>
                                         <th className="p-3 text-left">Work Order</th>
+                                        <th className="p-3 text-left">Work Name</th>
                                         <th className="p-3 text-center">Planned Labour</th>
                                         <th className="p-3 text-center">Actual Labour</th>
                                         <th className="p-3 text-left">Planned Work</th>
@@ -235,6 +256,7 @@ const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport
                                         <tr key={idx} className="hover:bg-white/5 transition-colors">
                                           <td className="p-3 text-foreground font-medium">{report.contractorName || '—'}</td>
                                           <td className="p-3 text-foreground">{report.workOrderNo || '—'}</td>
+                                          <td className="p-3 text-foreground">{report.workName || '—'}</td>
                                           <td className="p-3 text-center text-blue-400 font-semibold">{report.plannedLabour || 0}</td>
                                           <td className="p-3 text-center text-green-400 font-semibold">{report.actualLabour || 0}</td>
                                           <td className="p-3 text-foreground">{report.plannedWork || '—'}</td>
@@ -262,23 +284,43 @@ const PreviousEntries = ({ entries, hasMore, isLoadingMore, onLoadMore, onExport
                                 <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                                   Material Consumption
                                 </h5>
-                                <div className="border rounded-lg border-white/10 overflow-hidden">
-                                  <table className="w-full text-sm">
+                                <div className="border rounded-lg border-white/10 overflow-x-auto">
+                                  <table className="w-full text-sm min-w-[800px]">
                                     <thead className="bg-white/5 text-muted-foreground text-xs uppercase">
                                       <tr>
                                         <th className="p-3 text-left">Material Name</th>
-                                        <th className="p-3 text-center">Quantity</th>
+                                        <th className="p-3 text-center">Total Qty</th>
+                                        <th className="p-3 text-center">Used Total Qty</th>
+                                        <th className="p-3 text-center">Diff of Qty</th>
                                         <th className="p-3 text-center">Unit</th>
+                                        <th className="p-3 text-center">Planned Work Area</th>
+                                        <th className="p-3 text-center">Actual Work Area</th>
+                                        <th className="p-3 text-center">Diff in Work Area</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/10">
-                                      {entry.materialConsumption.map((mat, idx) => (
-                                        <tr key={idx} className="hover:bg-white/5 transition-colors">
-                                          <td className="p-3 text-foreground font-medium">{mat.materialName}</td>
-                                          <td className="p-3 text-center text-orange-400 font-semibold">{mat.totalQuantity}</td>
-                                          <td className="p-3 text-center text-muted-foreground">{mat.unit}</td>
-                                        </tr>
-                                      ))}
+                                      {entry.materialConsumption.map((mat, idx) => {
+                                        const diffQty = (() => { const a = parseFloat(mat.usedTotalQty), b = parseFloat(mat.totalQuantity); return isNaN(a)||isNaN(b) ? null : parseFloat((a-b).toFixed(4)); })();
+                                        const diffArea = (() => { const a = parseFloat(mat.actualWorkArea), b = parseFloat(mat.plannedWorkArea); return isNaN(a)||isNaN(b) ? null : parseFloat((a-b).toFixed(4)); })();
+                                        const diffQtyColor = diffQty === null ? '' : diffQty === 0 ? 'text-green-400' : diffQty > 0 ? 'text-red-400 font-semibold' : 'text-yellow-400';
+                                        const diffAreaColor = diffArea === null ? '' : diffArea === 0 ? 'text-green-400' : diffArea > 0 ? 'text-red-400 font-semibold' : 'text-yellow-400';
+                                        return (
+                                          <tr key={idx} className="hover:bg-white/5 transition-colors">
+                                            <td className="p-3 text-foreground font-medium">{mat.materialName || '—'}</td>
+                                            <td className="p-3 text-center text-orange-400 font-semibold">{mat.totalQuantity ?? 0}</td>
+                                            <td className="p-3 text-center text-blue-400 font-semibold">{mat.usedTotalQty ?? 0}</td>
+                                            <td className={`p-3 text-center font-mono ${diffQtyColor}`}>
+                                              {diffQty !== null ? (diffQty > 0 ? `+${diffQty}` : String(diffQty)) : '—'}
+                                            </td>
+                                            <td className="p-3 text-center text-muted-foreground">{mat.unit || '—'}</td>
+                                            <td className="p-3 text-center text-purple-400">{mat.plannedWorkArea ?? 0}</td>
+                                            <td className="p-3 text-center text-cyan-400">{mat.actualWorkArea ?? 0}</td>
+                                            <td className={`p-3 text-center font-mono ${diffAreaColor}`}>
+                                              {diffArea !== null ? (diffArea > 0 ? `+${diffArea}` : String(diffArea)) : '—'}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
                                     </tbody>
                                   </table>
                                 </div>

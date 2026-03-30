@@ -69,7 +69,7 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
     });
 
     const [items, setItems] = useState(
-        initialData?.items || [{ materialDescription: "", unit: "", requiredQuantity: "", orderQuantity: "" }]
+        initialData?.items || [{ materialDescription: "", unit: "", requiredQuantity: "", orderQuantity: "", remark: "" }]
     );
 
     useEffect(() => {
@@ -114,7 +114,7 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
     };
 
     const addItem = () => {
-        setItems([...items, { materialDescription: "", unit: "", requiredQuantity: "", orderQuantity: "" }]);
+        setItems([...items, { materialDescription: "", unit: "", requiredQuantity: "", orderQuantity: "", remark: "" }]);
     };
 
     const removeItem = (index) => {
@@ -483,18 +483,20 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                 </div>
 
                 {/* Table Header */}
-                <div className="grid grid-cols-12 border-b border-white/10 bg-white/5 font-medium text-xs uppercase text-muted-foreground">
-                    <div className="col-span-5 p-3 text-left border-r border-white/10">Materials Description</div>
-                    <div className="col-span-2 p-3 text-center border-r border-white/10">Unit</div>
-                    <div className="col-span-2 p-3 text-center border-r border-white/10">Required Qty</div>
-                    <div className="col-span-3 p-3 text-center">Order Qty</div>
+                <div className="grid grid-cols-14 border-b border-white/10 bg-white/5 font-medium text-xs uppercase text-muted-foreground" style={{gridTemplateColumns: '3fr 1.5fr 1.5fr 1.5fr 2fr auto'}}>
+                    <div className="p-3 text-left border-r border-white/10">Materials Description</div>
+                    <div className="p-3 text-center border-r border-white/10">Unit</div>
+                    <div className="p-3 text-center border-r border-white/10">Required Qty</div>
+                    <div className="p-3 text-center border-r border-white/10">Order Qty</div>
+                    <div className="p-3 text-center">Remark <span className="text-muted-foreground/50 normal-case">(optional)</span></div>
+                    <div className="w-10"></div>
                 </div>
 
                 {/* Table Items */}
                 <div className="divide-y divide-white/10">
                     {items.map((item, index) => (
-                        <div key={index} className="grid grid-cols-12 group relative min-h-[45px] hover:bg-white/5 transition-colors">
-                            <div className="col-span-5 border-r border-white/10 relative">
+                        <div key={index} className="group relative min-h-[45px] hover:bg-white/5 transition-colors flex">
+                            <div className="flex-[3] border-r border-white/10 relative">
                                 <textarea
                                     className="w-full h-full bg-transparent text-foreground outline-none resize-none overflow-hidden p-3 placeholder:text-muted-foreground/50 text-sm focus:bg-white/5 transition-colors"
                                     value={item.materialDescription}
@@ -503,7 +505,7 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                                     rows={1}
                                 />
                             </div>
-                            <div className="col-span-2 border-r border-white/10">
+                            <div className="flex-[1.5] border-r border-white/10">
                                 <select
                                     className="w-full h-full bg-transparent text-foreground outline-none text-center p-3 placeholder:text-muted-foreground/50 text-sm focus:bg-white/5 transition-colors appearance-none cursor-pointer"
                                     value={item.unit}
@@ -556,7 +558,7 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                                     </optgroup>
                                 </select>
                             </div>
-                            <div className="col-span-2 border-r border-white/10">
+                            <div className="flex-[1.5] border-r border-white/10">
                                 <input
                                     type="text"
                                     className="w-full h-full bg-transparent text-foreground outline-none text-center p-3 placeholder:text-muted-foreground/50 text-sm focus:bg-white/5 transition-colors"
@@ -565,19 +567,30 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                                     placeholder="0"
                                 />
                             </div>
-                            <div className="col-span-3 p-1 relative flex items-center justify-center">
+                            <div className="flex-[1.5] border-r border-white/10">
                                 <input
                                     type="text"
-                                    className="w-full h-full bg-transparent text-foreground outline-none text-center p-2 placeholder:text-muted-foreground/50 text-sm focus:bg-white/5 transition-colors"
+                                    className="w-full h-full bg-transparent text-foreground outline-none text-center p-3 placeholder:text-muted-foreground/50 text-sm focus:bg-white/5 transition-colors"
                                     value={item.orderQuantity}
                                     onChange={(e) => handleItemChange(index, "orderQuantity", e.target.value)}
                                     placeholder="0"
                                 />
+                            </div>
+                            <div className="flex-[2]">
+                                <input
+                                    type="text"
+                                    className="w-full h-full bg-transparent text-foreground outline-none p-3 placeholder:text-muted-foreground/50 text-sm focus:bg-white/5 transition-colors"
+                                    value={item.remark || ""}
+                                    onChange={(e) => handleItemChange(index, "remark", e.target.value)}
+                                    placeholder="Optional remark"
+                                />
+                            </div>
+                            <div className="w-10 flex items-center justify-center">
                                 {items.length > 1 && (
                                     <button
                                         type="button"
                                         onClick={() => removeItem(index)}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-red-500/20 rounded-md"
+                                        className="text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-red-500/20 rounded-md"
                                         title="Remove Item"
                                     >
                                         <Trash2 className="w-4 h-4" />

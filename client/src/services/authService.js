@@ -47,7 +47,8 @@ export const authService = {
     },
 
     // Logout user
-    logout() {
+    async logout() {
+        await api.post('/auth/logout').catch(() => {});
         localStorage.removeItem('token');
         localStorage.removeItem('user');
     },

@@ -52,10 +52,11 @@ const DailyProgressTable = ({ rows, onChange, onWorkOrderSelect, readOnly = fals
             (lastRow.actualLabour !== "" && lastRow.actualLabour >= 0) &&
             lastRow.plannedWork !== "" &&
             lastRow.actualWork !== "" &&
-            lastRow.status !== "";
+            lastRow.status !== "" &&
+            lastRow.workName !== "";
 
         if (isLastRowFilled) {
-            onChange([...rows, { contractorName: "", workOrderNo: "", plannedLabour: "", actualLabour: "", plannedWork: "", actualWork: "", status: "" }]);
+            onChange([...rows, { contractorName: "", workOrderNo: "", workName: "", plannedLabour: "", actualLabour: "", plannedWork: "", actualWork: "", status: "" }]);
         }
     }, [rows, readOnly, onChange]);
 
@@ -113,9 +114,10 @@ const DailyProgressTable = ({ rows, onChange, onWorkOrderSelect, readOnly = fals
 
             <div className="glass-card overflow-hidden">
                 {/* Header */}
-                <div className="grid grid-cols-[2fr,2fr,120px,120px,1.5fr,1.5fr,120px,40px] gap-2 p-3 bg-white/5 border-b border-white/10">
+                <div className="grid grid-cols-[2fr,2fr,1.5fr,120px,120px,1.5fr,1.5fr,120px,40px] gap-2 p-3 bg-white/5 border-b border-white/10">
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contractor Name</div>
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Work Order</div>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Work Name</div>
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-center">Planned Labour</div>
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-center">Actual Labour</div>
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Planned Work</div>
@@ -127,7 +129,7 @@ const DailyProgressTable = ({ rows, onChange, onWorkOrderSelect, readOnly = fals
                 {/* Rows */}
                 <div className="divide-y divide-white/5">
                     {rows.map((row, index) => (
-                        <motion.div key={index} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className="grid grid-cols-[2fr,2fr,120px,120px,1.5fr,1.5fr,120px,40px] gap-2 p-2 hover:bg-white/5 transition-colors group">
+                        <motion.div key={index} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className="grid grid-cols-[2fr,2fr,1.5fr,120px,120px,1.5fr,1.5fr,120px,40px] gap-2 p-2 hover:bg-white/5 transition-colors group">
                             {readOnly ? (
                                 <Input type="text" value={row.contractorName} disabled className="h-9 bg-white/5 border-white/10 text-sm" />
                             ) : (
@@ -176,6 +178,15 @@ const DailyProgressTable = ({ rows, onChange, onWorkOrderSelect, readOnly = fals
                                     </SelectContent>
                                 </Select>
                             )}
+
+                            <Input
+                                type="text"
+                                placeholder="Work Name"
+                                value={row.workName || ""}
+                                onChange={(e) => handleCellChange(index, "workName", e.target.value)}
+                                disabled={readOnly}
+                                className="h-9 bg-white/5 border-white/10 text-sm"
+                            />
 
                             <Input
                                 type="number"
@@ -248,7 +259,7 @@ const DailyProgressTable = ({ rows, onChange, onWorkOrderSelect, readOnly = fals
                 </div>
 
                 {/* Summary */}
-                <div className="grid grid-cols-[2fr,120px,120px,1.5fr,1.5fr,120px,40px] gap-2 p-3 bg-white/5 border-t border-white/10">
+                <div className="grid grid-cols-[2fr,2fr,1.5fr,120px,120px,1.5fr,1.5fr,120px,40px] gap-2 p-3 bg-white/5 border-t border-white/10">
                     <div className="text-sm font-semibold text-foreground">Total</div>
                     <div className="text-sm font-semibold text-secondary text-center">
                         {rows.reduce((sum, r) => sum + (typeof r.plannedLabour === 'number' ? r.plannedLabour : 0), 0)}
@@ -256,7 +267,7 @@ const DailyProgressTable = ({ rows, onChange, onWorkOrderSelect, readOnly = fals
                     <div className="text-sm font-semibold text-primary text-center">
                         {rows.reduce((sum, r) => sum + (typeof r.actualLabour === 'number' ? r.actualLabour : 0), 0)}
                     </div>
-                    <div className="col-span-3"></div>
+                    <div className="col-span-5"></div>
                 </div>
             </div>
         </motion.div>

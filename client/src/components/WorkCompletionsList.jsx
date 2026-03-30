@@ -79,7 +79,10 @@ const WorkCompletionsList = ({ workCompletions, hasMore, isLoadingMore, onLoadMo
         const day = String(d.getDate()).padStart(2, '0');
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const year = d.getFullYear();
-        return `${day}/${month}/${year}`;
+        const hh = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        const ss = String(d.getSeconds()).padStart(2, '0');
+        return `${day}/${month}/${year} ${hh}:${min}:${ss}`;
     };
 
     const getChecklistStatus = (checklist) => {
@@ -224,7 +227,7 @@ const WorkCompletionsList = ({ workCompletions, hasMore, isLoadingMore, onLoadMo
                                         <h4 className="font-medium text-foreground">WO #{completion.workOrderNumber}</h4>
                                         <p className="text-sm text-muted-foreground flex items-center gap-2">
                                             <Calendar className="w-3 h-3" />
-                                            {formatDate(completion.date)}
+                                            {formatDate(completion.createdAt || completion.date)}
                                             <Building className="w-3 h-3 ml-2" />
                                             {completion.blockTower}
                                         </p>

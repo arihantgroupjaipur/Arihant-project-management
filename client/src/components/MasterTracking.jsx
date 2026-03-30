@@ -8,14 +8,41 @@ import {
     Truck,
     ClipboardCheck,
     ClipboardList,
+    Sheet,
+    File,
+    CheckCircle2,
 } from "lucide-react";
+import { toast } from "sonner";
+import { generateTaskPDF } from "@/utils/taskPdfExport";
+import { generateIndentPDF, } from "@/utils/indentPdfExport";
+import { generateIndentCSV } from "@/utils/indentCsvExport";
+import { generateIndentExcel } from "@/utils/indentExcelExport";
+import { generatePurchaseOrderPDF } from "@/utils/purchaseOrderPdfExport";
+import { generatePurchaseOrderCSV } from "@/utils/purchaseOrderCsvExport";
+import { generatePurchaseOrderExcel } from "@/utils/purchaseOrderExcelExport";
+import { generateMaterialVerificationPdf } from "@/utils/materialVerificationPdfExport";
+import { exportMaterialVerificationCsv } from "@/utils/materialVerificationCsvExport";
+import { exportMaterialVerificationXlsx } from "@/utils/materialVerificationXlsxExport";
+import { generatePDF as generateEntriesPDF } from "@/utils/pdfExport";
+import { generateCSV as generateEntriesCSV } from "@/utils/csvExport";
+import { generateExcel as generateEntriesExcel } from "@/utils/excelExport";
 
 
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-import { format } from "date-fns";
 
-const fmt = (d) => d ? format(new Date(d), 'dd/MM/yyyy') : "—";
+const fmt = (d) => {
+    if (!d) return "—";
+    const dt = new Date(d);
+    if (isNaN(dt)) return "—";
+    const day = String(dt.getDate()).padStart(2, '0');
+    const mon = String(dt.getMonth() + 1).padStart(2, '0');
+    const yr = dt.getFullYear();
+    const hh = String(dt.getHours()).padStart(2, '0');
+    const min = String(dt.getMinutes()).padStart(2, '0');
+    const ss = String(dt.getSeconds()).padStart(2, '0');
+    return `${day}/${mon}/${yr} ${hh}:${min}:${ss}`;
+};
 
 const StatusChip = ({ status }) => {
     const map = {
@@ -124,6 +151,7 @@ const POList = ({ purchaseOrders }) => (
                     <th className="p-3 text-left">PO Number</th>
                     <th className="p-3 text-left">Vendor</th>
                     <th className="p-3 text-left">Indent No.</th>
+                    <th className="p-3 text-left">Task No</th>
                     <th className="p-3 text-left">Date</th>
                     <th className="p-3 text-center">Items</th>
                     <th className="p-3 text-left">Status</th>
@@ -131,12 +159,13 @@ const POList = ({ purchaseOrders }) => (
             </thead>
             <tbody className="divide-y divide-white/5">
                 {purchaseOrders.length === 0 ? (
-                    <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">No purchase orders found</td></tr>
+                    <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">No purchase orders found</td></tr>
                 ) : purchaseOrders.map(po => (
                     <tr key={po._id} className="hover:bg-white/5">
                         <td className="p-3 font-mono text-primary">{po.poNumber || po._id}</td>
                         <td className="p-3 text-foreground">{po.vendorName || "—"}</td>
-                        <td className="p-3 text-muted-foreground">{po.indentNumber || "—"}</td>
+                        <td className="p-3 text-muted-foreground">{po.indentReferences?.map(i => i?.indentNumber).join(', ') || "—"}</td>
+                        <td className="p-3 text-muted-foreground">{po.taskReference || "—"}</td>
                         <td className="p-3 text-muted-foreground">{fmt(po.poDate || po.createdAt)}</td>
                         <td className="p-3 text-center text-orange-400 font-bold">{po.items?.length || 0}</td>
                         <td className="p-3"><StatusChip status={po.status || "Pending"} /></td>
@@ -156,13 +185,15 @@ const MaterialVerList = ({ purchaseOrders }) => {
                     <tr>
                         <th className="p-3 text-left">PO Number</th>
                         <th className="p-3 text-left">Vendor</th>
+                        <th className="p-3 text-left">Indent No.</th>
+                        <th className="p-3 text-left">Task No</th>
                         <th className="p-3 text-center">Items Ordered</th>
                         <th className="p-3 text-left">Verification</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                     {purchaseOrders.length === 0 ? (
-                        <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">No material verifications found</td></tr>
+                        <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">No material verifications found</td></tr>
                     ) : purchaseOrders.map(po => {
                         const verified = po.items?.filter(i => Number(i.receivedQuantity) > 0).length || 0;
                         const total = po.items?.length || 0;
@@ -170,6 +201,8 @@ const MaterialVerList = ({ purchaseOrders }) => {
                             <tr key={po._id} className="hover:bg-white/5">
                                 <td className="p-3 font-mono text-primary">{po.poNumber || po._id}</td>
                                 <td className="p-3 text-foreground">{po.vendorName || "—"}</td>
+                                <td className="p-3 text-muted-foreground">{po.indentReferences?.map(i => i?.indentNumber).join(', ') || "—"}</td>
+                                <td className="p-3 text-muted-foreground">{po.taskReference || "—"}</td>
                                 <td className="p-3 text-center text-foreground">{total}</td>
                                 <td className="p-3">
                                     <span className={`text-xs px-2 py-0.5 rounded border ${verified === total && total > 0 ? "text-green-400 bg-green-500/10 border-green-500/20" : verified > 0 ? "text-yellow-400 bg-yellow-500/10 border-yellow-500/20" : "text-muted-foreground bg-white/5 border-white/10"}`}>
@@ -228,6 +261,7 @@ const DeploymentList = ({ entries }) => (
                     <th className="p-3 text-left">Date</th>
                     <th className="p-3 text-left">Site / WO</th>
                     <th className="p-3 text-left">Location</th>
+                    <th className="p-3 text-left">Work Names</th>
                     <th className="p-3 text-center">Workers</th>
                     <th className="p-3 text-left">Supervisor</th>
                     <th className="p-3 text-center">Materials</th>
@@ -235,17 +269,23 @@ const DeploymentList = ({ entries }) => (
             </thead>
             <tbody className="divide-y divide-white/5">
                 {entries.length === 0 ? (
-                    <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">No deployment entries found</td></tr>
-                ) : entries.map(e => (
-                    <tr key={e._id} className="hover:bg-white/5">
-                        <td className="p-3 text-muted-foreground">{e.date}</td>
-                        <td className="p-3 text-foreground font-medium">{e.projectName}</td>
-                        <td className="p-3 text-muted-foreground">{e.location}</td>
-                        <td className="p-3 text-center font-bold text-cyan-400">{e.workerCount}</td>
-                        <td className="p-3 text-foreground">{e.supervisor}</td>
-                        <td className="p-3 text-center text-orange-400 font-bold">{e.materialConsumption?.length || 0}</td>
-                    </tr>
-                ))}
+                    <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">No deployment entries found</td></tr>
+                ) : entries.map(e => {
+                    const workNames = [...new Set((e.dailyProgressReports || []).map(r => r.workName).filter(Boolean))];
+                    return (
+                        <tr key={e._id} className="hover:bg-white/5">
+                            <td className="p-3 text-muted-foreground">{e.date}</td>
+                            <td className="p-3 text-foreground font-medium">{e.projectName}</td>
+                            <td className="p-3 text-muted-foreground">{e.location}</td>
+                            <td className="p-3 text-foreground text-xs">
+                                {workNames.length > 0 ? workNames.join(', ') : '—'}
+                            </td>
+                            <td className="p-3 text-center font-bold text-cyan-400">{e.workerCount}</td>
+                            <td className="p-3 text-foreground">{e.supervisor}</td>
+                            <td className="p-3 text-center text-orange-400 font-bold">{e.materialConsumption?.length || 0}</td>
+                        </tr>
+                    );
+                })}
             </tbody>
         </table>
     </div>
@@ -289,10 +329,112 @@ const QUICK_SECTIONS = [
     { key: "po", label: "Purchase Orders", icon: ShoppingCart, color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/30" },
     { key: "mv", label: "Material Verification", icon: ShieldCheck, color: "text-teal-400", bg: "bg-teal-500/10 border-teal-500/30" },
     { key: "workorders", label: "Work Orders", icon: HardHat, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30" },
-    { key: "deployments", label: "Daily Deployments", icon: Truck, color: "text-cyan-400", bg: "bg-cyan-500/10 border-cyan-500/30" },
+    { key: "deployments", label: "Daily Progress Reports", icon: Truck, color: "text-cyan-400", bg: "bg-cyan-500/10 border-cyan-500/30" },
     { key: "completions", label: "Work Completions", icon: ClipboardCheck, color: "text-green-400", bg: "bg-green-500/10 border-green-500/30" },
 ];
 
+
+// ─── Bulk export helpers for work orders & completions ───────────────────────
+const bulkExportWorkOrdersCSV = (workOrders) => {
+    if (!workOrders.length) { toast.error("No work orders to export"); return; }
+    const headers = ["WO Number", "Date", "Task No", "Location", "Supervisor", "Planned Labour", "Total Amount"];
+    const rows = workOrders.map(wo => [
+        wo.workOrderNumber,
+        wo.date ? new Date(wo.date).toLocaleDateString('en-GB') : '',
+        wo.taskReference || '',
+        wo.workLocationName || '',
+        wo.storeKeeperSupervisorName || '',
+        wo.workItems?.reduce((s, i) => s + (Number(i.plannedLabour) || 0), 0) || 0,
+        wo.workItems?.reduce((s, i) => s + (Number(i.totalAmount) || 0), 0) || 0,
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `Work_Orders_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+};
+
+const bulkExportWorkOrdersExcel = async (workOrders) => {
+    if (!workOrders.length) { toast.error("No work orders to export"); return; }
+    const XLSX = await import('xlsx');
+    const rows = workOrders.map(wo => ({
+        "WO Number": wo.workOrderNumber,
+        "Date": wo.date ? new Date(wo.date).toLocaleDateString('en-GB') : '',
+        "Task No": wo.taskReference || '',
+        "Location": wo.workLocationName || '',
+        "Supervisor": wo.storeKeeperSupervisorName || '',
+        "Planned Labour": wo.workItems?.reduce((s, i) => s + (Number(i.plannedLabour) || 0), 0) || 0,
+        "Total Amount": wo.workItems?.reduce((s, i) => s + (Number(i.totalAmount) || 0), 0) || 0,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Work Orders");
+    XLSX.writeFile(wb, `Work_Orders_${new Date().toISOString().split('T')[0]}.xlsx`);
+};
+
+const bulkExportCompletionsCSV = (workCompletions) => {
+    if (!workCompletions.length) { toast.error("No completions to export"); return; }
+    const headers = ["Work Order", "Contractor", "Block/Tower", "Work Trade", "Date", "QC Remarks"];
+    const rows = workCompletions.map(wc => [
+        wc.workOrderNumber, wc.contractorName || '', wc.blockTower || '',
+        wc.workTrade || '', wc.date ? new Date(wc.date).toLocaleDateString('en-GB') : '', wc.qcRemarks || '',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `Work_Completions_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+};
+
+const bulkExportCompletionsExcel = async (workCompletions) => {
+    if (!workCompletions.length) { toast.error("No completions to export"); return; }
+    const XLSX = await import('xlsx');
+    const rows = workCompletions.map(wc => ({
+        "Work Order": wc.workOrderNumber,
+        "Contractor": wc.contractorName || '',
+        "Block/Tower": wc.blockTower || '',
+        "Work Trade": wc.workTrade || '',
+        "Date": wc.date ? new Date(wc.date).toLocaleDateString('en-GB') : '',
+        "QC Remarks": wc.qcRemarks || '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Work Completions");
+    XLSX.writeFile(wb, `Work_Completions_${new Date().toISOString().split('T')[0]}.xlsx`);
+};
+
+const bulkExportTasksCSV = (tasks) => {
+    if (!tasks.length) { toast.error("No tasks to export"); return; }
+    const headers = ["Task ID", "Work Particulars", "Start Date", "Finish Date", "Duration", "Status"];
+    const rows = tasks.map(t => [
+        t.taskId || '', t.workParticulars || '',
+        t.plannedStartDate ? new Date(t.plannedStartDate).toLocaleDateString('en-GB') : '',
+        t.plannedFinishDate ? new Date(t.plannedFinishDate).toLocaleDateString('en-GB') : '',
+        t.duration || '', t.status || 'Pending',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `Tasks_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+};
+
+const bulkExportTasksExcel = async (tasks) => {
+    if (!tasks.length) { toast.error("No tasks to export"); return; }
+    const XLSX = await import('xlsx');
+    const rows = tasks.map(t => ({
+        "Task ID": t.taskId || '',
+        "Work Particulars": t.workParticulars || '',
+        "Start Date": t.plannedStartDate ? new Date(t.plannedStartDate).toLocaleDateString('en-GB') : '',
+        "Finish Date": t.plannedFinishDate ? new Date(t.plannedFinishDate).toLocaleDateString('en-GB') : '',
+        "Duration": t.duration || '',
+        "Status": t.status || 'Pending',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Tasks");
+    XLSX.writeFile(wb, `Tasks_${new Date().toISOString().split('T')[0]}.xlsx`);
+};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const MasterTracking = ({
@@ -304,6 +446,44 @@ const MasterTracking = ({
     workCompletions = [],
 }) => {
     const [activeSection, setActiveSection] = useState("tasks");
+
+    const handleExport = async (type) => {
+        try {
+            if (activeSection === "tasks") {
+                if (type === "pdf") await generateTaskPDF(tasks);
+                else if (type === "csv") bulkExportTasksCSV(tasks);
+                else if (type === "xlsx") await bulkExportTasksExcel(tasks);
+            } else if (activeSection === "indents") {
+                if (type === "pdf") await generateIndentPDF(indents);
+                else if (type === "csv") generateIndentCSV(indents);
+                else if (type === "xlsx") generateIndentExcel(indents);
+            } else if (activeSection === "po") {
+                if (type === "pdf") await generatePurchaseOrderPDF(purchaseOrders);
+                else if (type === "csv") generatePurchaseOrderCSV(purchaseOrders);
+                else if (type === "xlsx") generatePurchaseOrderExcel(purchaseOrders);
+            } else if (activeSection === "mv") {
+                if (type === "pdf") await generateMaterialVerificationPdf(purchaseOrders);
+                else if (type === "csv") exportMaterialVerificationCsv(purchaseOrders);
+                else if (type === "xlsx") exportMaterialVerificationXlsx(purchaseOrders);
+            } else if (activeSection === "workorders") {
+                if (type === "csv") bulkExportWorkOrdersCSV(workOrders);
+                else if (type === "xlsx") await bulkExportWorkOrdersExcel(workOrders);
+                else toast.error("Use individual Work Order cards for PDF export");
+            } else if (activeSection === "deployments") {
+                if (type === "pdf") await generateEntriesPDF(entries);
+                else if (type === "csv") generateEntriesCSV(entries);
+                else if (type === "xlsx") generateEntriesExcel(entries);
+            } else if (activeSection === "completions") {
+                if (type === "csv") bulkExportCompletionsCSV(workCompletions);
+                else if (type === "xlsx") await bulkExportCompletionsExcel(workCompletions);
+                else toast.error("Use individual Certification cards for PDF export");
+            }
+            toast.success(`${type.toUpperCase()} exported successfully!`);
+        } catch (err) {
+            console.error("Export error:", err);
+            toast.error(`Failed to export ${type.toUpperCase()}`);
+        }
+    };
 
 
 
@@ -358,10 +538,38 @@ const MasterTracking = ({
                             const Icon = s.icon;
                             return (
                                 <>
-                                    <div className="flex items-center gap-2 mb-4">
+                                    <div className="flex items-center gap-2 mb-4 flex-wrap">
                                         <Icon className={`w-5 h-5 ${s.color}`} />
                                         <h3 className="text-base font-semibold text-foreground">{s.label}</h3>
-                                        <span className="text-xs text-muted-foreground ml-auto">{counts[activeSection]} records</span>
+                                        <span className="text-xs text-muted-foreground">{counts[activeSection]} records</span>
+                                        <div className="ml-auto flex items-center gap-2">
+                                            {activeSection !== "workorders" && activeSection !== "completions" && (
+                                                <button
+                                                    onClick={() => handleExport("pdf")}
+                                                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-medium transition-colors"
+                                                    title="Export as PDF"
+                                                >
+                                                    <FileText className="w-3.5 h-3.5" />
+                                                    PDF
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => handleExport("xlsx")}
+                                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs font-medium transition-colors"
+                                                title="Export as Excel"
+                                            >
+                                                <Sheet className="w-3.5 h-3.5" />
+                                                Excel
+                                            </button>
+                                            <button
+                                                onClick={() => handleExport("csv")}
+                                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-xs font-medium transition-colors"
+                                                title="Export as CSV"
+                                            >
+                                                <File className="w-3.5 h-3.5" />
+                                                CSV
+                                            </button>
+                                        </div>
                                     </div>
                                     {activeSection === "tasks" && <TaskList tasks={tasks} />}
                                     {activeSection === "indents" && <IndentList indents={indents} />}

@@ -1,6 +1,8 @@
 import express from 'express';
 import WorkCompletion from '../models/WorkCompletion.js';
 import authMiddleware from '../middleware/authMiddleware.js';
+import { syncAllWorkCompletionsToSheet } from '../utils/googleSheetsService.js';
+import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 
@@ -115,7 +117,8 @@ router.post('/', authMiddleware, async (req, res) => {
         });
 
         await workCompletion.save();
-        // Fire notification (non-blocking)
+        syncAllWorkCompletionsToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('CREATE', 'Work Completion', `Work Completion created for WO: ${workCompletion.workOrderNumber}`, req.user?.email, workCompletion.workOrderNumber);
         res.status(201).json(workCompletion);
     } catch (err) {
         console.error(err);
@@ -188,6 +191,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
             { new: true, runValidators: false }
         );
 
+        syncAllWorkCompletionsToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('UPDATE', 'Work Completion', `Work Completion updated for WO: ${updated.workOrderNumber}`, req.user?.email, updated.workOrderNumber);
         res.json(updated);
     } catch (err) {
         console.error(err);
@@ -207,6 +212,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         }
 
         await WorkCompletion.findByIdAndDelete(req.params.id);
+        syncAllWorkCompletionsToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('DELETE', 'Work Completion', `Work Completion deleted for WO: ${workCompletion.workOrderNumber}`, req.user?.email, workCompletion.workOrderNumber);
         res.json({ message: 'Work Completion deleted successfully' });
     } catch (err) {
         console.error(err);

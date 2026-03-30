@@ -10,7 +10,9 @@ import {
     Menu,
     X,
     FileText,
-    PackageCheck
+    PackageCheck,
+    Receipt,
+    Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
@@ -28,6 +30,8 @@ import MaterialVerificationsList from "@/components/MaterialVerificationsList";
 import { useAuth } from "@/context/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { getTasks } from "@/services/taskService";
+import BillsList from "@/components/BillsList";
+import PaymentVouchersList from "@/components/PaymentVouchersList";
 
 const EngineerDashboard = () => {
     const navigate = useNavigate();
@@ -180,18 +184,20 @@ const EngineerDashboard = () => {
         }
     };
 
-    const handleLogout = () => {
-        logout();
+    const handleLogout = async () => {
+        await logout();
         navigate("/login");
     };
 
     const menuItems = [
-        { id: "dailyDeploy", label: "Daily Deployment", icon: ClipboardList },
+        { id: "dailyDeploy", label: "Daily Progress Report", icon: ClipboardList },
         { id: "workOrder", label: "Work Order", icon: FileText },
         { id: "workCompletion", label: "Work Completion & Certification", icon: CheckCircle },
         { id: "indent", label: "Indent Form", icon: Truck },
         { id: "materialVerification", label: "Material Verification", icon: PackageCheck },
         { id: "history", label: "View History", icon: HardHat },
+        { id: "bills", label: "Bills", icon: Receipt },
+        { id: "payment-vouchers", label: "Payment Vouchers", icon: Wallet },
     ];
 
     return (
@@ -273,7 +279,7 @@ const EngineerDashboard = () => {
                     >
                         {activeTab === "dailyDeploy" && (
                             <div className="glass-card p-6 md:p-8">
-                                <h3 className="text-xl font-semibold mb-6">New Daily Deployment Entry</h3>
+                                <h3 className="text-xl font-semibold mb-6">New Daily Progress Report Entry</h3>
                                 <form onSubmit={handleSubmitDeployment} className="space-y-5">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <FloatingInput type="date" label="Date" value={formData.date} onChange={(e) => handleInputChange("date", e.target.value)} />
@@ -359,6 +365,14 @@ const EngineerDashboard = () => {
 
                         {activeTab === "history" && (
                             <PreviousEntries entries={entries} />
+                        )}
+
+                        {activeTab === "bills" && (
+                            <BillsList />
+                        )}
+
+                        {activeTab === "payment-vouchers" && (
+                            <PaymentVouchersList />
                         )}
                     </motion.div>
                 </div>

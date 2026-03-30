@@ -1,77 +1,75 @@
+const fmtTs = (d) => {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (isNaN(dt)) return '';
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const mm = String(dt.getMonth()+1).padStart(2,'0');
+    const yyyy = dt.getFullYear();
+    const hh = String(dt.getHours()).padStart(2,'0');
+    const min = String(dt.getMinutes()).padStart(2,'0');
+    const ss = String(dt.getSeconds()).padStart(2,'0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+};
+
 export const generateIndentCSV = (indents) => {
-    if (!indents || indents.length === 0) {
-        throw new Error('No indents to export');
-    }
+    if (!indents || indents.length === 0) throw new Error('No indents to export');
 
     const headers = [
-        'Indent Number',
-        'Date',
-        'Site Name',
-        'Material Group',
-        'Priority',
-        'Lead Time',
-        'Task Reference',
-        'Work Description',
-        'Block/Floor/Work',
-        'Site Engineer Name',
-        'Store Manager Name',
-        'Item Description',
-        'Unit',
-        'Required Quantity',
-        'Order Quantity'
+        'Indent Number', 'Date', 'Task Reference', 'Site Name', 'Site Engineer Name',
+        'Material Group', 'Priority', 'Lead Time (Days)', 'Block/Floor/Work',
+        'Work Description', 'Store Manager Name', 'Verification Status', 'Verified By',
+        'Created By', 'Item Description', 'Unit', 'Required Quantity', 'Order Quantity', 'Remark'
     ];
 
-    const escapeCsvRef = (field) => {
+    const esc = (field) => {
         if (field === null || field === undefined) return '';
-        const stringField = String(field);
-        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
-            return `"${stringField.replace(/"/g, '""')}"`;
-        }
-        return stringField;
+        const s = String(field);
+        return (s.includes(',') || s.includes('"') || s.includes('\n')) ? `"${s.replace(/"/g, '""')}"` : s;
     };
 
     let csvContent = headers.join(',') + '\n';
 
     indents.forEach(indent => {
         const baseRow = [
-            escapeCsvRef(indent.indentNumber),
-            escapeCsvRef(indent.date ? new Date(indent.date).toLocaleDateString('en-GB') : ''),
-            escapeCsvRef(indent.siteName),
-            escapeCsvRef(indent.materialGroup),
-            escapeCsvRef(indent.priority),
-            escapeCsvRef(indent.leadTime),
-            escapeCsvRef(indent.taskReference),
-            escapeCsvRef(indent.workDescription),
-            escapeCsvRef(indent.blockFloorWork),
-            escapeCsvRef(indent.siteEngineerName),
-            escapeCsvRef(indent.storeManagerName)
+            esc(indent.indentNumber),
+            esc(fmtTs(indent.createdAt || indent.date)),
+            esc(indent.taskReference),
+            esc(indent.siteName),
+            esc(indent.siteEngineerName),
+            esc(indent.materialGroup),
+            esc(indent.priority),
+            esc(indent.leadTime),
+            esc(indent.blockFloorWork),
+            esc(indent.workDescription),
+            esc(indent.storeManagerName),
+            esc(indent.verifiedByPurchaseManager ? 'Verified' : 'Pending'),
+            esc(indent.verifiedBy?.fullName || indent.verifiedBy?.email || ''),
+            esc(indent.createdBy?.fullName || indent.createdBy?.email || ''),
         ];
 
         if (indent.items && indent.items.length > 0) {
             indent.items.forEach(item => {
-                const row = [
+                csvContent += [
                     ...baseRow,
-                    escapeCsvRef(item.materialDescription),
-                    escapeCsvRef(item.unit),
-                    escapeCsvRef(item.requiredQuantity),
-                    escapeCsvRef(item.orderQuantity)
-                ];
-                csvContent += row.join(',') + '\n';
+                    esc(item.materialDescription),
+                    esc(item.unit),
+                    esc(item.requiredQuantity),
+                    esc(item.orderQuantity),
+                    esc(item.remark),
+                ].join(',') + '\n';
             });
+        } else {
+            csvContent += [...baseRow, '', '', '', '', ''].join(',') + '\n';
         }
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    if (navigator.msSaveBlob) { // IE 10+
-        navigator.msSaveBlob(blob, 'Indent_Requirements.csv');
-    } else {
-        const url = URL.createObjectURL(blob);
-        link.href = url;
-        link.setAttribute('download', `Indent_Requirements_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
+    link.href = url;
+    link.setAttribute('download', `Indent_Requirements_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 };

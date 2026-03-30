@@ -70,7 +70,7 @@ const TaskForm = ({ onSuccess, onCancel }) => {
         }
     }, [plannedStartDate, plannedFinishDate]);
 
-    const currentTimestamp = format(new Date(), "dd/MM/yyyy hh:mm a");
+    const currentTimestamp = format(new Date(), "dd/MM/yyyy hh:mm:ss a");
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">

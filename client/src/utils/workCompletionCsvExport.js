@@ -1,3 +1,16 @@
+const fmtTs = (d) => {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (isNaN(dt)) return '';
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const mm = String(dt.getMonth()+1).padStart(2,'0');
+    const yyyy = dt.getFullYear();
+    const hh = String(dt.getHours()).padStart(2,'0');
+    const min = String(dt.getMinutes()).padStart(2,'0');
+    const ss = String(dt.getSeconds()).padStart(2,'0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+};
+
 export const generateWorkCompletionCSV = (completion) => {
     if (!completion) {
         throw new Error('No work completion to export');
@@ -11,7 +24,7 @@ export const generateWorkCompletionCSV = (completion) => {
     rows.push([]);
 
     // Basic Information
-    rows.push(['Date', new Date(completion.date).toLocaleDateString('en-GB')]);
+    rows.push(['Date', fmtTs(completion.createdAt || completion.date)]);
     rows.push(['Work Order No.', completion.workOrderNumber]);
     rows.push(['Block / Tower', completion.blockTower]);
     rows.push(['Floor / Zone / Unit', completion.floorZoneUnit]);

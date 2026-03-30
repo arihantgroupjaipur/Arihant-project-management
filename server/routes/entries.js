@@ -2,6 +2,8 @@ import express from 'express';
 import Entry from '../models/Entry.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import adminMiddleware from '../middleware/adminMiddleware.js';
+import { syncAllEntriesToSheet } from '../utils/googleSheetsService.js';
+import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 
@@ -93,7 +95,8 @@ router.post('/', authMiddleware, async (req, res) => {
     try {
         const newEntry = new Entry(req.body);
         const entry = await newEntry.save();
-        // Fire notification (non-blocking)
+        syncAllEntriesToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('CREATE', 'Daily Progress', `Daily progress entry created for site: ${entry.projectName || entry._id}`, req.user?.email, String(entry._id));
         res.json(entry);
     } catch (err) {
         console.error(err);
@@ -116,6 +119,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
             { $set: req.body },
             { new: true }
         );
+        syncAllEntriesToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('UPDATE', 'Daily Progress', `Daily progress entry updated for site: ${entry.projectName || entry._id}`, req.user?.email, String(entry._id));
         res.json(entry);
     } catch (err) {
         console.error(err);
@@ -134,6 +139,8 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
         }
 
         await Entry.findByIdAndDelete(req.params.id);
+        syncAllEntriesToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('DELETE', 'Daily Progress', `Daily progress entry deleted for site: ${entry.projectName || entry._id}`, req.user?.email, String(entry._id));
         res.json({ message: 'Entry removed' });
     } catch (err) {
         console.error(err);

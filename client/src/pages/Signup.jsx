@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
-import { UserPlus, User, Lock, ArrowLeft, Mail, Phone, IdCard, FileText } from "lucide-react";
+import { UserPlus, User, Lock, ArrowLeft, Mail, Phone, IdCard, FileText, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import BackgroundOrbs from "@/components/BackgroundOrbs";
 import FloatingInput from "@/components/FloatingInput";
@@ -25,6 +25,8 @@ const Signup = () => {
         setFormData((prev) => ({ ...prev, [field]: value }));
     };
 
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
 
     const handleSubmit = async (e) => {
@@ -244,13 +246,20 @@ const Signup = () => {
                                 <div className="relative">
                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none z-10" />
                                     <FloatingInput
-                                        type="password"
+                                        type={showPassword ? "text" : "password"}
                                         label="Password"
                                         value={formData.password}
                                         onChange={(e) => handleInputChange("password", e.target.value)}
-                                        className="pl-11"
+                                        className="pl-11 pr-11"
                                         labelClassName="left-11"
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(v => !v)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors z-10"
+                                    >
+                                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
                                 </div>
                             </motion.div>
 
@@ -262,13 +271,20 @@ const Signup = () => {
                                 <div className="relative">
                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none z-10" />
                                     <FloatingInput
-                                        type="password"
+                                        type={showConfirmPassword ? "text" : "password"}
                                         label="Confirm Password"
                                         value={formData.confirmPassword}
                                         onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
-                                        className="pl-11"
+                                        className="pl-11 pr-11"
                                         labelClassName="left-11"
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(v => !v)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors z-10"
+                                    >
+                                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
                                 </div>
                             </motion.div>
                         </div>

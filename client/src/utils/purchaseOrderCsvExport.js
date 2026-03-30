@@ -1,3 +1,16 @@
+const fmtTs = (d) => {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (isNaN(dt)) return '';
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const mm = String(dt.getMonth()+1).padStart(2,'0');
+    const yyyy = dt.getFullYear();
+    const hh = String(dt.getHours()).padStart(2,'0');
+    const min = String(dt.getMinutes()).padStart(2,'0');
+    const ss = String(dt.getSeconds()).padStart(2,'0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+};
+
 export const generatePurchaseOrderCSV = (purchaseOrders) => {
     if (!purchaseOrders || purchaseOrders.length === 0) {
         throw new Error('No Purchase Orders to export');
@@ -28,7 +41,7 @@ export const generatePurchaseOrderCSV = (purchaseOrders) => {
 
         const baseRow = [
             escapeCsvRef(po.poNumber),
-            escapeCsvRef(po.date ? new Date(po.date).toLocaleDateString('en-GB') : ''),
+            escapeCsvRef(fmtTs(po.createdAt || po.date)),
             escapeCsvRef(po.status),
             escapeCsvRef(indentNum),
             escapeCsvRef(po.taskReference),

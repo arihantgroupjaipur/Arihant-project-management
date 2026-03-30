@@ -1,3 +1,16 @@
+const fmtTs = (d) => {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (isNaN(dt)) return '';
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const mm = String(dt.getMonth()+1).padStart(2,'0');
+    const yyyy = dt.getFullYear();
+    const hh = String(dt.getHours()).padStart(2,'0');
+    const min = String(dt.getMinutes()).padStart(2,'0');
+    const ss = String(dt.getSeconds()).padStart(2,'0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+};
+
 export const generateWorkOrderCSV = (workOrder) => {
     if (!workOrder) {
         throw new Error('No work order to export');
@@ -24,7 +37,7 @@ export const generateWorkOrderCSV = (workOrder) => {
     rows.push(['WORK ORDER']);
     rows.push([]);
     rows.push(['Work Order Number:', workOrder.workOrderNumber]);
-    rows.push(['Date:', new Date(workOrder.date).toLocaleDateString('en-GB')]);
+    rows.push(['Date:', fmtTs(workOrder.createdAt || workOrder.date)]);
     rows.push(['Main Work Order Reference:', workOrder.mainWorkOrderReference || '']);
     rows.push(['Address/Location:', workOrder.addressLocation || '']);
     rows.push(['Contact Person Name:', workOrder.contactPersonName || '']);

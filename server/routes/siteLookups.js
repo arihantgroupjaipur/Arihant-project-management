@@ -6,7 +6,7 @@ const router = express.Router();
 const authenticate = authMiddleware;
 
 const adminOrPurchaseManagerOnly = (req, res, next) => {
-    if (req.user?.role !== 'admin' && req.user?.role !== 'purchase_manager') {
+    if (req.user?.role !== 'admin' && req.user?.role !== 'super-admin' && req.user?.role !== 'purchase_manager') {
         return res.status(403).json({ message: 'Access denied: Requires Admin or Purchase Manager role.' });
     }
     next();

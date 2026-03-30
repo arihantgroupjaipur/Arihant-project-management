@@ -1,12 +1,23 @@
 import express from 'express';
 import PurchaseOrder from '../models/PurchaseOrder.js';
 import authMiddleware from '../middleware/authMiddleware.js';
+import { syncAllPurchaseOrdersToSheet } from '../utils/googleSheetsService.js';
+import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 const authenticate = authMiddleware;
 
+// Middleware: only admin, super-admin, purchase_manager
+const poCreateMiddleware = (req, res, next) => {
+    const allowed = ['admin', 'super-admin', 'purchase_manager'];
+    if (!req.user || !allowed.includes(req.user.role)) {
+        return res.status(403).json({ message: 'Access denied. Only admins and purchase managers can create Purchase Orders.' });
+    }
+    next();
+};
+
 // Create PO
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, poCreateMiddleware, async (req, res) => {
     try {
         const newPO = new PurchaseOrder({
             ...req.body,
@@ -17,6 +28,8 @@ router.post('/', authenticate, async (req, res) => {
 
         // Populate indentReferences before returning to get indentNumber
         const populatedPO = await PurchaseOrder.findById(savedPO._id).populate('indentReferences');
+        syncAllPurchaseOrdersToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('CREATE', 'Purchase Order', `PO created: ${populatedPO.poNumber}`, req.user?.email, populatedPO.poNumber);
         res.status(201).json(populatedPO);
     } catch (error) {
         console.error("Error creating PO:", error);
@@ -298,6 +311,8 @@ router.put('/:id', authenticate, async (req, res) => {
         ).populate('indentReferences');
 
         if (!updatedPO) return res.status(404).json({ message: 'Purchase Order not found' });
+        syncAllPurchaseOrdersToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('UPDATE', 'Purchase Order', `PO updated: ${updatedPO.poNumber}`, req.user?.email, updatedPO.poNumber);
         res.status(200).json(updatedPO);
     } catch (error) {
         if (error.code === 11000) {
@@ -312,6 +327,8 @@ router.delete('/:id', authenticate, async (req, res) => {
     try {
         const deletedPO = await PurchaseOrder.findByIdAndDelete(req.params.id);
         if (!deletedPO) return res.status(404).json({ message: 'Purchase Order not found' });
+        syncAllPurchaseOrdersToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('DELETE', 'Purchase Order', `PO deleted: ${deletedPO.poNumber}`, req.user?.email, deletedPO.poNumber);
         res.status(200).json({ message: 'Purchase Order deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -319,7 +336,7 @@ router.delete('/:id', authenticate, async (req, res) => {
 });
 
 // Attach or remove an uploaded PDF on a PO
-router.patch('/:id/pdf', authenticate, async (req, res) => {
+router.patch('/:id/pdf', authenticate, poCreateMiddleware, async (req, res) => {
     try {
         const { uploadedPdf } = req.body;
         const updatedPO = await PurchaseOrder.findByIdAndUpdate(

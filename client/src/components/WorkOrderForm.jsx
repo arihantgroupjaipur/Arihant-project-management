@@ -11,6 +11,7 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
     const engineerSigRef = useRef(null);
     const supervisorSigRef = useRef(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [woNumberError, setWoNumberError] = useState("");
     const [tasks, setTasks] = useState([]);
     const [taskSearch, setTaskSearch] = useState("");
     const [taskDropdownOpen, setTaskDropdownOpen] = useState(false);
@@ -106,6 +107,20 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
 
     const handleInputChange = (field, value) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
+        if (field === "workOrderNumber") setWoNumberError("");
+    };
+
+    const checkWoNumberUnique = async (value) => {
+        if (!value) return;
+        // Skip check when editing and number hasn't changed
+        if (initialData && initialData.workOrderNumber === value) return;
+        try {
+            const data = await workOrderService.getAllWorkOrders({ limit: 1000 });
+            const exists = (data.workOrders || []).some(wo => wo.workOrderNumber === value);
+            if (exists) setWoNumberError("This Work Order Number already exists.");
+        } catch {
+            // silently ignore
+        }
     };
 
     const handleWorkItemChange = (index, field, value) => {
@@ -151,6 +166,10 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
             toast.error("Work Order Number is required");
             return;
         }
+        if (woNumberError) {
+            toast.error("Work Order Number already exists. Please use a unique number.");
+            return;
+        }
         if (!formData.addressLocation) {
             toast.error("Address/Location is required");
             return;
@@ -191,6 +210,7 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
 
             const workOrderData = {
                 ...formData,
+                date: formData.date ? new Date(formData.date).toISOString() : new Date().toISOString(),
                 workItems,
                 signatures,
             };
@@ -252,9 +272,11 @@ const WorkOrderForm = ({ onSuccess, initialData = null }) => {
                                 type="text"
                                 value={formData.workOrderNumber}
                                 onChange={(e) => handleInputChange("workOrderNumber", e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                                onBlur={(e) => checkWoNumberUnique(e.target.value)}
+                                className={`w-full px-3 py-2 rounded-lg bg-white/5 border text-foreground focus:outline-none focus:ring-2 ${woNumberError ? "border-red-500/60 focus:ring-red-500/50" : "border-white/10 focus:ring-purple-500/50"}`}
                                 placeholder="Enter work order number"
                             />
+                            {woNumberError && <p className="text-red-400 text-xs mt-1">{woNumberError}</p>}
                         </div>
                     </div>
                 </div>

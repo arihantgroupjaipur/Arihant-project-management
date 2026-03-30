@@ -44,9 +44,12 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { userService } from "@/services/userService";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
 const UserManagement = () => {
+    const { user: currentUser } = useAuth();
+    const isSuperAdmin = currentUser?.role === 'super-admin';
     const queryClient = useQueryClient();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -281,20 +284,23 @@ const UserManagement = () => {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="p-4">
-                                                <span className={`px-2 py-1 rounded-md text-xs font-medium border ${user.role === 'admin'
-                                                    ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                                                    : user.role === 'project_manager'
-                                                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                                        : user.role === 'purchase_manager'
-                                                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                                            : user.role === 'account_manager'
-                                                                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
-                                                                : 'bg-green-500/10 text-green-400 border-green-500/20'
+                                                <span className={`px-2 py-1 rounded-md text-xs font-medium border ${user.role === 'super-admin'
+                                                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                                    : user.role === 'admin'
+                                                        ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                                        : user.role === 'project_manager'
+                                                            ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                                            : user.role === 'purchase_manager'
+                                                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                                : user.role === 'account_manager'
+                                                                    ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                                                                    : 'bg-green-500/10 text-green-400 border-green-500/20'
                                                     }`}>
-                                                    {user.role === 'project_manager' ? 'Project Manager' :
-                                                        user.role === 'purchase_manager' ? 'Purchase Manager' :
-                                                            user.role === 'account_manager' ? 'Account Manager' :
-                                                                user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                                                    {user.role === 'super-admin' ? 'Super Admin' :
+                                                        user.role === 'project_manager' ? 'Project Manager' :
+                                                            user.role === 'purchase_manager' ? 'Purchase Manager' :
+                                                                user.role === 'account_manager' ? 'Account Manager' :
+                                                                    user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="p-4">
@@ -312,20 +318,24 @@ const UserManagement = () => {
                                             </TableCell>
                                             <TableCell className="p-4 text-right">
                                                 <div className="flex justify-end gap-2">
-                                                    <button
-                                                        onClick={() => handleOpenDialog(user)}
-                                                        className="p-1.5 hover:bg-white/20 rounded-lg text-blue-400 transition-colors"
-                                                        title="Edit User"
-                                                    >
-                                                        <Pencil className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(user)}
-                                                        className="p-1.5 hover:bg-white/20 rounded-lg text-red-400 transition-colors"
-                                                        title="Delete User"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    {(isSuperAdmin || user.role !== 'super-admin') && (
+                                                        <button
+                                                            onClick={() => handleOpenDialog(user)}
+                                                            className="p-1.5 hover:bg-white/20 rounded-lg text-blue-400 transition-colors"
+                                                            title="Edit User"
+                                                        >
+                                                            <Pencil className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    {(isSuperAdmin || user.role !== 'super-admin') && (
+                                                        <button
+                                                            onClick={() => handleDelete(user)}
+                                                            className="p-1.5 hover:bg-white/20 rounded-lg text-red-400 transition-colors"
+                                                            title="Delete User"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>

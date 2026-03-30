@@ -123,7 +123,8 @@ const WorkOrdersList = ({ workOrders, hasMore, isLoadingMore, onLoadMore, onCrea
                         order.workOrderNumber?.toLowerCase().includes(q) ||
                         order.addressLocation?.toLowerCase().includes(q) ||
                         order.storeKeeperSupervisorName?.toLowerCase().includes(q) ||
-                        order.createdBy?.fullName?.toLowerCase().includes(q);
+                        order.createdBy?.fullName?.toLowerCase().includes(q) ||
+                        order.taskReference?.toLowerCase().includes(q);
                 });
 
                 if (filtered.length === 0) {
@@ -149,7 +150,7 @@ const WorkOrdersList = ({ workOrders, hasMore, isLoadingMore, onLoadMore, onCrea
                                     <h4 className="font-medium text-foreground">WO #{order.workOrderNumber}</h4>
                                     <p className="text-sm text-muted-foreground flex items-center gap-2">
                                         <Calendar className="w-3 h-3" />
-                                        {format(new Date(order.date), 'dd/MM/yyyy')}
+                                        {order.createdAt ? format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm:ss') : format(new Date(order.date), 'dd/MM/yyyy')}
                                     </p>
                                 </div>
                             </div>
@@ -322,6 +323,10 @@ const WorkOrdersList = ({ workOrders, hasMore, isLoadingMore, onLoadMore, onCrea
                                             <div>
                                                 <p className="text-sm text-muted-foreground mb-1">Main Reference</p>
                                                 <p className="font-medium">{order.mainWorkOrderReference || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-muted-foreground mb-1">Task No</p>
+                                                <p className="font-medium">{order.taskReference || 'N/A'}</p>
                                             </div>
                                             <div>
                                                 <p className="text-sm text-muted-foreground mb-1">Supervisor</p>

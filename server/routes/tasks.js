@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import { sendTaskAssignmentEmail } from '../utils/emailService.js';
 import { syncAllTasksToSheet } from '../utils/googleSheetsService.js';
+import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 
@@ -15,7 +16,7 @@ router.post('/', async (req, res) => {
     try {
         const { workParticulars, contractor, contractorName, plannedStartDate, plannedFinishDate, duration } = req.body;
 
-        if (req.user.role !== 'project_manager' && req.user.role !== 'admin' && req.user.role !== 'purchase_manager') {
+        if (req.user.role !== 'project_manager' && req.user.role !== 'admin' && req.user.role !== 'super-admin' && req.user.role !== 'purchase_manager') {
             return res.status(403).json({ message: 'Access denied. Project Manager or Purchase Manager role required.' });
         }
 
@@ -73,7 +74,8 @@ router.post('/', async (req, res) => {
         }
 
         // --- GOOGLE SHEETS SYNC (Fire & Forget) ---
-        // ON HOLD: syncAllTasksToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        syncAllTasksToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('CREATE', 'Task', `Task created: ${savedTask.taskId || savedTask._id}`, req.user?.email, savedTask.taskId);
 
         res.status(201).json(savedTask);
     } catch (error) {
@@ -132,7 +134,7 @@ router.get('/', async (req, res) => {
 // Update a task
 router.put('/:id', async (req, res) => {
     try {
-        if (req.user.role !== 'project_manager' && req.user.role !== 'admin' && req.user.role !== 'purchase_manager') {
+        if (req.user.role !== 'project_manager' && req.user.role !== 'admin' && req.user.role !== 'super-admin' && req.user.role !== 'purchase_manager') {
             return res.status(403).json({ message: 'Access denied.' });
         }
 
@@ -162,7 +164,8 @@ router.put('/:id', async (req, res) => {
         await updatedTask.populate('projectManager', 'fullName email');
 
         // --- GOOGLE SHEETS SYNC (Fire & Forget) ---
-        // ON HOLD: syncAllTasksToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        syncAllTasksToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('UPDATE', 'Task', `Task updated: ${updatedTask.taskId || updatedTask._id}`, req.user?.email, updatedTask.taskId);
 
         res.status(200).json(updatedTask);
     } catch (error) {
@@ -173,7 +176,7 @@ router.put('/:id', async (req, res) => {
 // Delete a task (admin or project_manager)
 router.delete('/:id', async (req, res) => {
     try {
-        if (req.user.role !== 'admin' && req.user.role !== 'project_manager' && req.user.role !== 'purchase_manager') {
+        if (req.user.role !== 'admin' && req.user.role !== 'super-admin' && req.user.role !== 'project_manager' && req.user.role !== 'purchase_manager') {
             return res.status(403).json({ message: 'Access denied.' });
         }
 
@@ -190,7 +193,8 @@ router.delete('/:id', async (req, res) => {
         await task.deleteOne();
 
         // --- GOOGLE SHEETS SYNC (Fire & Forget) ---
-        // ON HOLD: syncAllTasksToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        syncAllTasksToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('DELETE', 'Task', `Task deleted: ${task.taskId || task._id}`, req.user?.email, task.taskId);
 
         res.status(200).json({ message: 'Task deleted successfully' });
     } catch (error) {

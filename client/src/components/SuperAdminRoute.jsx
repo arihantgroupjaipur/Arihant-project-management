@@ -7,15 +7,14 @@ const Spinner = () => (
     </div>
 );
 
-/** Only 'admin' role allowed */
-const AdminRoute = ({ children }) => {
+/** Only 'super-admin' role allowed */
+const SuperAdminRoute = ({ children }) => {
     const { user, isAuthenticated, loading } = useAuth();
     if (loading) return <Spinner />;
     if (!isAuthenticated) return <Navigate to="/login" replace />;
-    if (user?.role !== 'admin') {
-        // Redirect the intruder to their own dashboard
+    if (user?.role !== 'super-admin') {
         const homeMap = {
-            'super-admin': '/super-admin',
+            admin: '/admin',
             engineer: '/engineer',
             project_manager: '/project-manager',
             purchase_manager: '/purchase',
@@ -26,4 +25,4 @@ const AdminRoute = ({ children }) => {
     return children;
 };
 
-export default AdminRoute;
+export default SuperAdminRoute;

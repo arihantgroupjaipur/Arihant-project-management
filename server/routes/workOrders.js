@@ -1,6 +1,8 @@
 import express from 'express';
 import WorkOrder from '../models/WorkOrder.js';
 import authMiddleware from '../middleware/authMiddleware.js';
+import { syncAllWorkOrdersToSheet } from '../utils/googleSheetsService.js';
+import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 
@@ -21,6 +23,7 @@ router.get('/', authMiddleware, async (req, res) => {
                 { workLocationName: { $regex: search, $options: 'i' } },
                 { contactPersonName: { $regex: search, $options: 'i' } },
                 { mainWorkOrderReference: { $regex: search, $options: 'i' } },
+                { taskReference: { $regex: search, $options: 'i' } },
             ];
         }
 
@@ -69,6 +72,7 @@ router.post('/', authMiddleware, async (req, res) => {
             workOrderNumber,
             date,
             mainWorkOrderReference,
+            taskReference,
             addressLocation,
             contactPersonName,
             workLocationName,
@@ -88,6 +92,7 @@ router.post('/', authMiddleware, async (req, res) => {
             workOrderNumber,
             date,
             mainWorkOrderReference,
+            taskReference,
             addressLocation,
             contactPersonName,
             workLocationName,
@@ -99,7 +104,8 @@ router.post('/', authMiddleware, async (req, res) => {
         });
 
         await workOrder.save();
-        // Fire notification (non-blocking)
+        syncAllWorkOrdersToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('CREATE', 'Work Order', `Work Order created: ${workOrder.workOrderNumber}`, req.user?.email, workOrder.workOrderNumber);
         res.status(201).json(workOrder);
     } catch (err) {
         console.error(err);
@@ -116,6 +122,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
             workOrderNumber,
             date,
             mainWorkOrderReference,
+            taskReference,
             addressLocation,
             contactPersonName,
             workLocationName,
@@ -143,6 +150,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
         workOrder.workOrderNumber = workOrderNumber;
         workOrder.date = date;
         workOrder.mainWorkOrderReference = mainWorkOrderReference;
+        workOrder.taskReference = taskReference;
         workOrder.addressLocation = addressLocation;
         workOrder.contactPersonName = contactPersonName;
         workOrder.workLocationName = workLocationName;
@@ -153,6 +161,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
         if (uploadedPdf !== undefined) workOrder.uploadedPdf = uploadedPdf;
 
         await workOrder.save();
+        syncAllWorkOrdersToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('UPDATE', 'Work Order', `Work Order updated: ${workOrder.workOrderNumber}`, req.user?.email, workOrder.workOrderNumber);
         res.json(workOrder);
     } catch (err) {
         console.error(err);
@@ -174,6 +184,7 @@ router.patch('/:id/pdf', authMiddleware, async (req, res) => {
         if (!workOrder) {
             return res.status(404).json({ message: 'Work Order not found' });
         }
+        syncAllWorkOrdersToSheet().catch(err => console.error('Sheet Sync Error:', err));
         res.json(workOrder);
     } catch (err) {
         console.error(err);
@@ -193,6 +204,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         }
 
         await WorkOrder.findByIdAndDelete(req.params.id);
+        syncAllWorkOrdersToSheet().catch(err => console.error('Sheet Sync Error:', err));
+        logActivity('DELETE', 'Work Order', `Work Order deleted: ${workOrder.workOrderNumber}`, req.user?.email, workOrder.workOrderNumber);
         res.json({ message: 'Work Order deleted successfully' });
     } catch (err) {
         console.error(err);

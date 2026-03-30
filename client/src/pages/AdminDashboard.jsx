@@ -6,7 +6,11 @@ import {
   ArrowLeft, Plus, RefreshCw, Users, Pencil, Trash2, FileText, ClipboardCheck, BarChart3, LineChart, Menu, X, Calendar as CalendarIcon, LogOut, Eye, Sheet, File, ShoppingCart, FileCheck, Download, RefreshCcw,
   CheckCircle,
   Database,
-  Link2
+  Link2,
+  ScrollText,
+  UserX,
+  Receipt,
+  Wallet,
 } from "lucide-react";
 import BackgroundOrbs from "@/components/BackgroundOrbs";
 import PreviousEntries from "@/components/PreviousEntries";
@@ -55,21 +59,272 @@ import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/context/AuthContext";
+import api from "@/services/api";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import BillsList from "@/components/BillsList";
+import PaymentVouchersList from "@/components/PaymentVouchersList";
+
+const SHEET_MODULES = [
+  { key: 'tasks', label: 'Tasks', settingKey: 'google_sheet_id', description: 'Task ID, Work Particulars, Contractor, Dates, Status, Project Manager' },
+  { key: 'indents', label: 'Indents', settingKey: 'google_sheet_id_indents', description: 'Indent No, Site, Materials, Priority, Verification Status' },
+  { key: 'purchase_orders', label: 'Purchase Orders', settingKey: 'google_sheet_id_purchase_orders', description: 'PO Number, Vendor, Items, Amounts, Verification Status' },
+  { key: 'work_orders', label: 'Work Orders', settingKey: 'google_sheet_id_work_orders', description: 'WO Number, Location, Work Items, Total Amount' },
+  { key: 'work_completions', label: 'Work Completions', settingKey: 'google_sheet_id_work_completions', description: 'WO Number, Contractor, Checklists, Materials Consumed' },
+  { key: 'daily_progress', label: 'Daily Progress Reports', settingKey: 'google_sheet_id_entries', description: 'Date, Site, Supervisor, Workers, Material Consumption' },
+  { key: 'bills', label: 'Bills', settingKey: 'google_sheet_id_bills', description: 'Bill No., Contractor, WO/PO Number, Amount, Status, Remarks, Attachments' },
+];
+
+const ACTION_COLORS = {
+  CREATE: 'text-green-400 bg-green-500/10 border-green-500/20',
+  UPDATE: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+  DELETE: 'text-red-400 bg-red-500/10 border-red-500/20',
+  VERIFY: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+  LOGIN: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+  OTHER: 'text-muted-foreground bg-white/5 border-white/10',
+};
+
+const ROLE_LABEL = {
+  'super-admin': 'Super Admin',
+  admin: 'Admin',
+  engineer: 'Engineer',
+  project_manager: 'Project Manager',
+  purchase_manager: 'Purchase Manager',
+  account_manager: 'Account Manager',
+};
+
+const LogsPanel = () => {
+  const { user } = useAuth();
+  const [logsPage, setLogsPage] = useState(1);
+  const [allLogs, setAllLogs] = useState([]);
+  const [hasMoreLogs, setHasMoreLogs] = useState(false);
+  const [isClearingLogs, setIsClearingLogs] = useState(false);
+  const [isClearLogsModalOpen, setIsClearLogsModalOpen] = useState(false);
+  const [forceLogoutingId, setForceLogoutingId] = useState(null);
+  const queryClient = useQueryClient();
+
+  const { data: sessionsData } = useQuery({
+    queryKey: ['active-sessions'],
+    queryFn: async () => {
+      const { data } = await api.get('/logs/sessions');
+      return data;
+    },
+    refetchInterval: 30000,
+  });
+
+  const { data: logsData, isLoading: isLogsLoading } = useQuery({
+    queryKey: ['logs', logsPage],
+    queryFn: async () => {
+      const { data } = await api.get(`/logs?page=${logsPage}&limit=50`);
+      return data;
+    },
+    keepPreviousData: true,
+  });
+
+  useEffect(() => {
+    if (logsData) {
+      if (logsPage === 1) {
+        setAllLogs(logsData.logs || []);
+      } else {
+        setAllLogs(prev => [...prev, ...(logsData.logs || [])]);
+      }
+      setHasMoreLogs(logsData.page < logsData.pages);
+    }
+  }, [logsData, logsPage]);
+
+  const handleForceLogout = async (userId, email) => {
+    setForceLogoutingId(userId);
+    try {
+      await api.delete(`/logs/sessions/${userId}`);
+      toast.success(`${email} has been logged out`);
+      queryClient.invalidateQueries({ queryKey: ['active-sessions'] });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to force-logout user');
+    } finally {
+      setForceLogoutingId(null);
+    }
+  };
+
+  const handleClearLogs = async () => {
+    setIsClearingLogs(true);
+    try {
+      await api.delete('/logs');
+      setAllLogs([]);
+      setLogsPage(1);
+      setHasMoreLogs(false);
+      queryClient.invalidateQueries({ queryKey: ['logs'] });
+      toast.success('Activity logs cleared');
+    } catch {
+      toast.error('Failed to clear logs');
+    } finally {
+      setIsClearingLogs(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-4xl mx-auto space-y-6"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-xl font-bold text-foreground">Activity Logs</h3>
+          <p className="text-muted-foreground text-sm mt-1">Audit trail of all actions in the system</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-sm text-foreground font-medium">{user?.fullName || user?.email}</span>
+            <span className="text-xs text-muted-foreground border-l border-white/10 pl-2">{user?.email}</span>
+          </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsClearLogsModalOpen(true)}
+          disabled={isClearingLogs || allLogs.length === 0}
+          className="gap-2 text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-300"
+        >
+          <Trash2 className="w-4 h-4" />
+          Clear All Logs
+        </Button>
+        </div>
+      </div>
+
+      {/* Active Sessions */}
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-white/5 flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-sm font-semibold text-foreground">
+            Currently Logged In — {sessionsData?.sessions?.length ?? 0} user{sessionsData?.sessions?.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+        {!sessionsData?.sessions?.length ? (
+          <p className="px-5 py-4 text-sm text-muted-foreground italic">No active sessions.</p>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {sessionsData.sessions.map((s) => (
+              <div key={s._id} className="flex items-center gap-4 px-5 py-3">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                  {(s.fullName || s.email).charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{s.fullName || s.email}</p>
+                  <p className="text-xs text-muted-foreground truncate">{s.email}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="text-xs font-medium text-primary/80 bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
+                    {ROLE_LABEL[s.role] || s.role}
+                  </span>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Since {new Date(s.loginAt).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: 'short' })}
+                  </p>
+                </div>
+                {s.userId !== user?._id && s.userId !== user?.id && (
+                  <button
+                    onClick={() => handleForceLogout(s.userId, s.email)}
+                    disabled={forceLogoutingId === s.userId}
+                    title={`Force logout ${s.email}`}
+                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium border border-red-500/20 transition-colors disabled:opacity-50"
+                  >
+                    {forceLogoutingId === s.userId ? (
+                      <span className="w-3 h-3 border border-red-400/40 border-t-red-400 rounded-full animate-spin" />
+                    ) : (
+                      <UserX className="w-3.5 h-3.5" />
+                    )}
+                    Logout
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="glass-card rounded-xl overflow-hidden">
+        {isLogsLoading && logsPage === 1 ? (
+          <div className="flex items-center justify-center py-16 text-muted-foreground">
+            <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin mr-3" />
+            Loading logs...
+          </div>
+        ) : allLogs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+            <ScrollText className="w-10 h-10 opacity-30" />
+            <p>No activity logs yet.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {allLogs.map((log) => (
+              <div key={log._id} className="flex items-start gap-4 px-5 py-4 hover:bg-white/5 transition-colors">
+                <div className="shrink-0 mt-0.5">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${ACTION_COLORS[log.action] || ACTION_COLORS.OTHER}`}>
+                    {log.action}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-medium text-muted-foreground bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">
+                      {log.module}
+                    </span>
+                    {log.ref && (
+                      <span className="text-xs text-primary/70 font-mono">{log.ref}</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-foreground mt-1">{log.description}</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-xs text-muted-foreground">{log.performedBy || 'System'}</span>
+                    <span className="text-xs text-muted-foreground/50">·</span>
+                    <span className="text-xs text-muted-foreground">
+                      {log.createdAt ? new Date(log.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {hasMoreLogs && (
+          <div className="p-4 flex justify-center border-t border-white/5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLogsPage(p => p + 1)}
+              disabled={isLogsLoading}
+              className="gap-2"
+            >
+              {isLogsLoading ? <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /> : 'Load More'}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <ConfirmModal
+        isOpen={isClearLogsModalOpen}
+        onClose={() => setIsClearLogsModalOpen(false)}
+        onConfirm={handleClearLogs}
+        title="Clear All Activity Logs"
+        message="This will permanently delete all activity logs and cannot be undone."
+        confirmText="Clear All Logs"
+      />
+    </motion.div>
+  );
+};
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'super-admin';
+  const isSuperAdmin = user?.role === 'super-admin';
   const isSiteEngineer = user?.role === 'engineer';
   const isTaskManager = user?.role === 'admin' || user?.role === 'project_manager' || user?.role === 'purchase_manager';
   const isPurchaseManager = user?.role === 'purchase_manager';
+  const canCreatePO = isAdmin || user?.role === 'purchase_manager';
   const canChangePurchaseOrderStatus = user?.role === 'admin' || user?.role === 'project_manager' || user?.role === 'purchase_manager';
   const panelTitle =
-    user?.role === 'admin' ? 'Admin' :
-      user?.role === 'project_manager' ? 'Project Manager' :
-        user?.role === 'purchase_manager' ? 'Purchase Manager' :
-          'Site Engineer';
+    user?.role === 'super-admin' ? 'Super Admin' :
+      user?.role === 'admin' ? 'Admin' :
+        user?.role === 'project_manager' ? 'Project Manager' :
+          user?.role === 'purchase_manager' ? 'Purchase Manager' :
+            'Site Engineer';
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -176,9 +431,9 @@ const AdminDashboard = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   // Integrations state
-  const [googleSheetIdInput, setGoogleSheetIdInput] = useState('');
-  const [googleSheetIds, setGoogleSheetIds] = useState([]);
-  const [isSavingIntegration, setIsSavingIntegration] = useState(false);
+  const [sheetIds, setSheetIds] = useState({});
+  const [sheetInputs, setSheetInputs] = useState({});
+  const [sheetSaving, setSheetSaving] = useState({});
 
   // Work Orders Pagination State
   const [workOrders, setWorkOrders] = useState([]);
@@ -419,19 +674,25 @@ const AdminDashboard = () => {
     fetchPurchaseOrders(nextPage, true);
   };
 
-  // Settings Queries
-  const { data: googleSheetIdSetting, refetch: refetchSettings } = useQuery({
-    queryKey: ['settings', 'google_sheet_id'],
-    queryFn: () => settingsService.getSetting('google_sheet_id'),
-    enabled: user?.role === 'admin'
-  });
+  // Settings Queries — one per sheet module (hooks must be at top level, not in .map())
+  const sheetQ0 = useQuery({ queryKey: ['settings', SHEET_MODULES[0].settingKey], queryFn: () => settingsService.getSetting(SHEET_MODULES[0].settingKey), enabled: user?.role === 'admin' });
+  const sheetQ1 = useQuery({ queryKey: ['settings', SHEET_MODULES[1].settingKey], queryFn: () => settingsService.getSetting(SHEET_MODULES[1].settingKey), enabled: user?.role === 'admin' });
+  const sheetQ2 = useQuery({ queryKey: ['settings', SHEET_MODULES[2].settingKey], queryFn: () => settingsService.getSetting(SHEET_MODULES[2].settingKey), enabled: user?.role === 'admin' });
+  const sheetQ3 = useQuery({ queryKey: ['settings', SHEET_MODULES[3].settingKey], queryFn: () => settingsService.getSetting(SHEET_MODULES[3].settingKey), enabled: user?.role === 'admin' });
+  const sheetQ4 = useQuery({ queryKey: ['settings', SHEET_MODULES[4].settingKey], queryFn: () => settingsService.getSetting(SHEET_MODULES[4].settingKey), enabled: user?.role === 'admin' });
+  const sheetQ5 = useQuery({ queryKey: ['settings', SHEET_MODULES[5].settingKey], queryFn: () => settingsService.getSetting(SHEET_MODULES[5].settingKey), enabled: user?.role === 'admin' });
+  const sheetQ6 = useQuery({ queryKey: ['settings', SHEET_MODULES[6].settingKey], queryFn: () => settingsService.getSetting(SHEET_MODULES[6].settingKey), enabled: user?.role === 'admin' });
 
-  // Pre-fill input when setting loads
+  // Populate sheetIds when settings load
   useEffect(() => {
-    if (googleSheetIdSetting?.value && !googleSheetIdInput) {
-      setGoogleSheetIdInput(googleSheetIdSetting.value);
-    }
-  }, [googleSheetIdSetting, googleSheetIdInput]);
+    const queries = [sheetQ0, sheetQ1, sheetQ2, sheetQ3, sheetQ4, sheetQ5, sheetQ6];
+    const updated = {};
+    SHEET_MODULES.forEach((mod, i) => {
+      const val = queries[i].data?.value;
+      if (val) updated[mod.key] = Array.isArray(val) ? val : val.split(',').map(s => s.trim()).filter(Boolean);
+    });
+    if (Object.keys(updated).length > 0) setSheetIds(prev => ({ ...prev, ...updated }));
+  }, [sheetQ0.data, sheetQ1.data, sheetQ2.data, sheetQ3.data, sheetQ4.data, sheetQ5.data, sheetQ6.data]);
 
   const { data: siteNames = [] } = useQuery({
     queryKey: ['siteLookups', 'siteName'],
@@ -455,7 +716,7 @@ const AdminDashboard = () => {
 
   // Global loading state
   const isRefreshing = useIsFetching() > 0;
-  const lastUpdate = new Date().toLocaleTimeString();
+  const lastUpdate = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   const deleteTaskMutation = useMutation({
     mutationFn: deleteTask,
@@ -733,7 +994,7 @@ const AdminDashboard = () => {
     if (!workOrderToDelete) return;
     try {
       await workOrderService.deleteWorkOrder(workOrderToDelete._id);
-      queryClient.invalidateQueries({ queryKey: ['workOrders'] });
+      setWorkOrders(prev => prev.filter(wo => wo._id !== workOrderToDelete._id));
       toast.success("Work Order deleted successfully");
       setWorkOrderToDelete(null);
     } catch (error) {
@@ -746,7 +1007,7 @@ const AdminDashboard = () => {
     if (!entryToDelete) return;
     try {
       await entryService.delete(entryToDelete._id);
-      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      setEntries(prev => prev.filter(e => e._id !== entryToDelete._id));
       toast.success("Deployment entry deleted successfully");
       setEntryToDelete(null);
     } catch (error) {
@@ -757,42 +1018,34 @@ const AdminDashboard = () => {
 
   const totalWorkers = entries.reduce((sum, e) => sum + e.workerCount, 0);
 
-  // Handle saving the Google Sheet integration
-  const handleSaveGoogleSheet = async (updatedIds = googleSheetIds) => {
+  // Sheet integration handlers
+  const handleSaveSheet = async (moduleKey, settingKey, ids) => {
+    setSheetSaving(prev => ({ ...prev, [moduleKey]: true }));
     try {
-      setIsSavingIntegration(true);
-      await settingsService.updateSetting('google_sheet_id', updatedIds);
-      await refetchSettings();
-      toast.success('Google Sheet configuration saved successfully!');
+      await settingsService.updateSetting(settingKey, ids);
+      setSheetIds(prev => ({ ...prev, [moduleKey]: ids }));
+      toast.success('Google Sheet configuration saved!');
     } catch (error) {
       console.error(error);
-      toast.error('Failed to save integration');
+      toast.error('Failed to save sheet configuration');
     } finally {
-      setIsSavingIntegration(false);
+      setSheetSaving(prev => ({ ...prev, [moduleKey]: false }));
     }
   };
 
-  const handleAddSheetId = () => {
-    if (!googleSheetIdInput.trim()) {
-      toast.error('Please enter a Spreadsheet ID');
-      return;
-    }
-
-    if (googleSheetIds.includes(googleSheetIdInput.trim())) {
-      toast.error('This Spreadsheet ID is already added.');
-      return;
-    }
-
-    const newIds = [...googleSheetIds, googleSheetIdInput.trim()];
-    setGoogleSheetIds(newIds);
-    setGoogleSheetIdInput('');
-    handleSaveGoogleSheet(newIds);
+  const handleAddSheetId = (moduleKey, settingKey) => {
+    const input = (sheetInputs[moduleKey] || '').trim();
+    if (!input) { toast.error('Please enter a Spreadsheet ID'); return; }
+    const current = sheetIds[moduleKey] || [];
+    if (current.includes(input)) { toast.error('This Spreadsheet ID is already added.'); return; }
+    const newIds = [...current, input];
+    setSheetInputs(prev => ({ ...prev, [moduleKey]: '' }));
+    handleSaveSheet(moduleKey, settingKey, newIds);
   };
 
-  const handleRemoveSheetId = (idToRemove) => {
-    const newIds = googleSheetIds.filter(id => id !== idToRemove);
-    setGoogleSheetIds(newIds);
-    handleSaveGoogleSheet(newIds);
+  const handleRemoveSheetId = (moduleKey, settingKey, idToRemove) => {
+    const newIds = (sheetIds[moduleKey] || []).filter(id => id !== idToRemove);
+    handleSaveSheet(moduleKey, settingKey, newIds);
   };
 
   // Sidebar link component
@@ -831,7 +1084,7 @@ const AdminDashboard = () => {
           <SidebarLink id="indent" label="Indent / Site Requirement" icon={FileText} />
           <SidebarLink id="purchase-order" label="Purchase Order" icon={ShoppingCart} />
           <SidebarLink id="material-verification" label="Material Verification Certificate" icon={FileCheck} />
-          <SidebarLink id="entries" label="Daily Deployment" icon={Users} />
+          <SidebarLink id="entries" label="Daily Progress Report" icon={Users} />
           <SidebarLink id="workorder" label="Work Orders" icon={FileText} />
           <SidebarLink id="certification" label="Certifications" icon={ClipboardCheck} />
 
@@ -843,13 +1096,16 @@ const AdminDashboard = () => {
             </>
           )}
           <SidebarLink id="site-lookups" label="Site Lookups" icon={FileText} />
-          {/* ON HOLD: isAdmin && <SidebarLink id="integrations" label="Integrations" icon={Link2} /> */}
+          {isAdmin && <SidebarLink id="integrations" label="Integrations" icon={Link2} />}
+          {isSuperAdmin && <SidebarLink id="logs" label="Activity Logs" icon={ScrollText} />}
+          <SidebarLink id="bills" label="Bills" icon={Receipt} />
+          <SidebarLink id="payment-vouchers" label="Payment Vouchers" icon={Wallet} />
         </nav>
 
         <div className="p-4 border-t border-white/10">
           <button
-            onClick={() => {
-              logout();
+            onClick={async () => {
+              await logout();
               navigate("/login");
             }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors"
@@ -897,7 +1153,7 @@ const AdminDashboard = () => {
                 <SidebarLink id="indent" label="Indent / Site Requirement" icon={FileText} />
                 <SidebarLink id="purchase-order" label="Purchase Order" icon={ShoppingCart} />
                 <SidebarLink id="material-verification" label="Material Verification Certificate" icon={FileCheck} />
-                <SidebarLink id="entries" label="Daily Deployment" icon={Users} />
+                <SidebarLink id="entries" label="Daily Progress Report" icon={Users} />
                 <SidebarLink id="workorder" label="Work Orders" icon={FileText} />
                 <SidebarLink id="certification" label="Certifications" icon={ClipboardCheck} />
 
@@ -909,13 +1165,16 @@ const AdminDashboard = () => {
                   </>
                 )}
                 <SidebarLink id="site-lookups" label="Site Lookups" icon={FileText} />
-                {/* ON HOLD: isAdmin && <SidebarLink id="integrations" label="Integrations" icon={Link2} /> */}
+                {isAdmin && <SidebarLink id="integrations" label="Integrations" icon={Link2} />}
+                {isSuperAdmin && <SidebarLink id="logs" label="Activity Logs" icon={ScrollText} />}
+                <SidebarLink id="bills" label="Bills" icon={Receipt} />
+                <SidebarLink id="payment-vouchers" label="Payment Vouchers" icon={Wallet} />
               </nav>
 
               <div className="p-4 border-t border-white/10">
                 <button
-                  onClick={() => {
-                    logout();
+                  onClick={async () => {
+                    await logout();
                     navigate("/login");
                   }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors"
@@ -941,7 +1200,7 @@ const AdminDashboard = () => {
               <Menu className="w-6 h-6" />
             </button>
             <h2 className="text-lg font-semibold text-foreground truncate max-w-[200px] md:max-w-none">
-              {activeTab === 'entries' && 'Daily Labour Deployment'}
+              {activeTab === 'entries' && 'Daily Progress Report'}
               {activeTab === 'workorder' && 'Work Order Management'}
               {activeTab === 'certification' && 'Work Completion & QA/QC'}
 
@@ -954,6 +1213,9 @@ const AdminDashboard = () => {
               {activeTab === 'purchase-order' && 'Purchase Order Management'}
               {activeTab === 'material-verification' && 'Material Verification Certificate'}
               {activeTab === 'integrations' && 'Integrations'}
+              {activeTab === 'logs' && isSuperAdmin && 'Activity Logs'}
+              {activeTab === 'bills' && 'Bills'}
+              {activeTab === 'payment-vouchers' && 'Payment Vouchers'}
             </h2>
           </div>
 
@@ -1008,7 +1270,7 @@ const AdminDashboard = () => {
               </Button>
             )}
 
-            {activeTab === 'purchase-order' && !showPurchaseOrderForm && (
+            {activeTab === 'purchase-order' && !showPurchaseOrderForm && canCreatePO && (
               <div className="flex gap-2">
                 <Button onClick={() => setShowPurchaseOrderForm(true)} size="sm" className="gap-2 text-xs md:text-sm">
                   <Plus className="w-4 h-4" />
@@ -1065,7 +1327,7 @@ const AdminDashboard = () => {
               {showDeploymentForm ? (
                 <div className="glass-card p-6">
                   <div className="mb-6 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">{editingEntry ? 'Edit Deployment Entry' : 'New Daily Deployment Entry'}</h3>
+                    <h3 className="text-lg font-semibold">{editingEntry ? 'Edit Progress Report Entry' : 'New Daily Progress Report Entry'}</h3>
                     <Button variant="ghost" onClick={() => {
                       setShowDeploymentForm(false);
                       setEditingEntry(null);
@@ -1557,7 +1819,7 @@ const AdminDashboard = () => {
                               </td>
                               <td className="p-4 font-mono text-foreground">{indent.indentNumber}</td>
                               <td className="p-4 text-foreground">{indent.createdBy?.fullName || indent.createdBy?.email || 'Unknown'}</td>
-                              <td className="p-4 text-muted-foreground">{format(new Date(indent.createdAt || indent.date), 'dd/MM/yyyy hh:mm a')}</td>
+                              <td className="p-4 text-muted-foreground">{format(new Date(indent.createdAt || indent.date), 'dd/MM/yyyy hh:mm:ss a')}</td>
                               <td className="p-4 text-foreground">{indent.siteName}</td>
                               <td className="p-4 text-foreground">{indent.siteEngineerName}</td>
                               <td className="p-4 text-foreground">{indent.materialGroup}</td>
@@ -1775,6 +2037,7 @@ const AdminDashboard = () => {
                     searchQuery={purchaseOrderSearch}
                     filterStatus={purchaseOrderFilterStatus}
                     isAdmin={isAdmin}
+                    canUpload={canCreatePO}
                     onEdit={(po) => {
                       setEditingPurchaseOrder(po);
                       setShowPurchaseOrderForm(true);
@@ -1965,7 +2228,7 @@ const AdminDashboard = () => {
                                 </span>
                               </td>
                               <td className="p-4 text-muted-foreground whitespace-nowrap">
-                                {task.createdAt ? format(new Date(task.createdAt), 'dd/MM/yyyy hh:mm a') : '—'}
+                                {task.createdAt ? format(new Date(task.createdAt), 'dd/MM/yyyy hh:mm:ss a') : '—'}
                               </td>
                               <td className="p-4 font-medium text-foreground">{task.workParticulars || '—'}</td>
                               <td className="p-4 text-foreground">{task.contractor?.name || task.contractorName || 'Unknown'}</td>
@@ -2263,89 +2526,97 @@ const AdminDashboard = () => {
             >
               <div>
                 <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                  Integrations
+                  Google Sheets Integration
                 </h2>
-                <p className="text-muted-foreground mt-1">Connect Arihant Project Management with external tools.</p>
+                <p className="text-muted-foreground mt-1">Connect each module to a Google Sheet for real-time sync.</p>
               </div>
 
-              <div className="bg-card border rounded-xl overflow-hidden shadow-sm">
-                <div className="p-6 border-b bg-muted/20">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-[#0F9D58]/10 rounded-lg">
-                      <Link2 className="w-6 h-6 text-[#0F9D58]" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg text-foreground">Google Sheets Sync (Tasks)</h3>
-                      <p className="text-sm text-muted-foreground">Automatically sync all Tasks to a Google Sheet in real-time.</p>
-                    </div>
-                  </div>
-                </div>
+              {/* Setup Instructions */}
+              <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
+                <h4 className="font-medium text-primary mb-2 flex items-center gap-2"><Link2 className="w-4 h-4" /> Setup Instructions</h4>
+                <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
+                  <li>Create a blank Google Sheet for each module you want to sync.</li>
+                  <li>Copy the Spreadsheet ID from the URL: <code className="bg-muted px-1.5 py-0.5 rounded text-foreground">/spreadsheets/d/<span className="text-primary font-bold">SPREADSHEET_ID</span>/edit</code></li>
+                  <li>Paste it in the field below for the corresponding module.</li>
+                  <li className="text-amber-400 font-medium">Share each sheet with your Service Account email (Editor access).</li>
+                </ol>
+              </div>
 
-                <div className="p-6 space-y-6">
-                  <div className="bg-primary/5 rounded-lg p-4 border border-primary/10">
-                    <h4 className="font-medium text-primary mb-2">How to get your Spreadsheet ID:</h4>
-                    <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
-                      <li>Create or open a blank Google Sheet.</li>
-                      <li>Look at the URL: <code className="bg-muted px-1.5 py-0.5 rounded text-foreground">https://docs.google.com/spreadsheets/d/<span className="text-primary font-bold">YOUR_SPREADSHEET_ID</span>/edit</code></li>
-                      <li>Copy everything between <code className="bg-muted px-1 rounded">/d/</code> and <code className="bg-muted px-1 rounded">/edit</code> and paste it below.</li>
-                      <li className="text-amber-500 font-medium mt-2">Important: You MUST share your Google Sheet with the Service Account email (Editor access) for this to work!</li>
-                    </ol>
-                  </div>
-
-                  <div className="space-y-4">
-                    <label className="text-sm font-medium">Linked Spreadsheets</label>
-
-                    {googleSheetIds.length > 0 ? (
-                      <div className="space-y-2">
-                        {googleSheetIds.map((id, index) => (
-                          <div key={index} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg p-3">
-                            <div className="font-mono text-sm text-foreground truncate mr-4">{id}</div>
-                            <button
-                              onClick={() => handleRemoveSheetId(id)}
-                              disabled={isSavingIntegration}
-                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10 p-1.5 rounded-md transition-colors shrink-0"
-                              title="Remove Sheet"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
+              {/* One card per module */}
+              {SHEET_MODULES.map((mod) => {
+                const ids = sheetIds[mod.key] || [];
+                const input = sheetInputs[mod.key] || '';
+                const saving = sheetSaving[mod.key] || false;
+                return (
+                  <div key={mod.key} className="bg-card border rounded-xl overflow-hidden shadow-sm">
+                    <div className="p-4 border-b bg-muted/20 flex items-center gap-3">
+                      <div className="p-2 bg-[#0F9D58]/10 rounded-lg">
+                        <Link2 className="w-5 h-5 text-[#0F9D58]" />
                       </div>
-                    ) : (
-                      <div className="text-sm text-muted-foreground italic border border-dashed border-white/20 rounded-lg p-4 text-center">
-                        No spreadsheets linked yet.
+                      <div>
+                        <h3 className="font-semibold text-foreground">{mod.label}</h3>
+                        <p className="text-xs text-muted-foreground">{mod.description}</p>
                       </div>
-                    )}
-
-                    <div className="pt-2">
-                      <label className="text-sm font-medium mb-2 block">Add New Spreadsheet ID</label>
-                      <div className="flex flex-col sm:flex-row gap-3">
+                      {ids.length > 0 && (
+                        <span className="ml-auto text-xs font-medium text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-1 rounded-full">
+                          {ids.length} sheet{ids.length > 1 ? 's' : ''} linked
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-4 space-y-3">
+                      {ids.length > 0 ? (
+                        <div className="space-y-2">
+                          {ids.map((id, idx) => (
+                            <div key={idx} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                              <span className="font-mono text-xs text-foreground truncate mr-3">{id}</span>
+                              <button
+                                onClick={() => handleRemoveSheetId(mod.key, mod.settingKey, id)}
+                                disabled={saving}
+                                className="text-red-400 hover:text-red-300 hover:bg-red-500/10 p-1 rounded-md transition-colors shrink-0"
+                                title="Remove"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic text-center py-2">No sheet linked yet.</p>
+                      )}
+                      <div className="flex gap-2">
                         <input
                           type="text"
-                          value={googleSheetIdInput}
-                          onChange={(e) => setGoogleSheetIdInput(e.target.value)}
-                          placeholder="e.g. 1BxiMVs0XRX5nZYz_... (Paste ID here)"
-                          className="flex-1 rounded-lg border border-input bg-background px-4 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                          value={input}
+                          onChange={(e) => setSheetInputs(prev => ({ ...prev, [mod.key]: e.target.value }))}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddSheetId(mod.key, mod.settingKey)}
+                          placeholder="Paste Spreadsheet ID here…"
+                          className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                         />
                         <button
-                          onClick={handleAddSheetId}
-                          disabled={isSavingIntegration || !googleSheetIdInput.trim()}
-                          className="bg-primary text-primary-foreground hover:bg-primary/90 px-6 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 min-w-[120px] justify-center"
+                          onClick={() => handleAddSheetId(mod.key, mod.settingKey)}
+                          disabled={saving || !input.trim()}
+                          className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5 shrink-0"
                         >
-                          {isSavingIntegration ? (
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          ) : (
-                            <>
-                              <Plus className="w-4 h-4" /> Add Sheet
-                            </>
-                          )}
+                          {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Plus className="w-3.5 h-3.5" /> Add</>}
                         </button>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                );
+              })}
             </motion.div>
+          )}
+
+          {activeTab === 'logs' && isSuperAdmin && (
+            <LogsPanel />
+          )}
+
+          {activeTab === 'bills' && (
+            <BillsList isAdmin={isAdmin} />
+          )}
+
+          {activeTab === 'payment-vouchers' && (
+            <PaymentVouchersList isAdmin={isAdmin} />
           )}
         </div>
       </main >
@@ -2674,45 +2945,74 @@ const AdminDashboard = () => {
             </div>
           </DialogHeader>
 
-          <div className="mt-4">
-            <h4 className="font-semibold text-foreground mb-4 border-b border-white/10 pb-2">Material Requirements List</h4>
-            <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/20">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-white/5 text-muted-foreground font-medium uppercase text-xs">
-                  <tr>
-                    <th className="p-4 border-r border-white/10">Description</th>
-                    <th className="p-4 border-r border-white/10 text-center">Unit</th>
-                    <th className="p-4 border-r border-white/10 text-center">Required</th>
-                    <th className="p-4 text-center">Order Qty</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {selectedIndent?.items?.length === 0 ? (
-                    <tr>
-                      <td colSpan="4" className="p-8 text-center text-muted-foreground">No items listed.</td>
-                    </tr>
-                  ) : (
-                    selectedIndent?.items?.map((item, index) => (
-                      <tr key={index} className="hover:bg-white/5 transition-colors">
-                        <td className="p-4 border-r border-white/10 text-foreground">{item.materialDescription}</td>
-                        <td className="p-4 border-r border-white/10 text-center text-muted-foreground">{item.unit || '-'}</td>
-                        <td className="p-4 border-r border-white/10 text-center text-foreground font-semibold">{item.requiredQuantity || 0}</td>
-                        <td className="p-4 text-center text-muted-foreground">{item.orderQuantity || 0}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          <div className="mt-4 space-y-5">
+            {/* Basic Information */}
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 border-b border-white/10 pb-2">Basic Information</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {[
+                  { label: 'Indent No.', value: selectedIndent?.indentNumber },
+                  { label: 'Date', value: selectedIndent?.date ? new Date(selectedIndent.date).toLocaleDateString('en-IN') : '—' },
+                  { label: 'Task Reference', value: selectedIndent?.taskReference || '—' },
+                  { label: 'Site Name', value: selectedIndent?.siteName || '—' },
+                  { label: 'Site Engineer', value: selectedIndent?.siteEngineerName || '—' },
+                  { label: 'Material Group', value: selectedIndent?.materialGroup || '—' },
+                  { label: 'Priority', value: selectedIndent?.priority || '—' },
+                  { label: 'Lead Time', value: selectedIndent?.leadTime ? `${selectedIndent.leadTime} days` : '—' },
+                  { label: 'Store Manager', value: selectedIndent?.storeManagerName || '—' },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-white/5 rounded-lg p-3 border border-white/10">
+                    <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">{label}</span>
+                    <span className="font-medium text-foreground text-sm">{value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-6 bg-white/5 p-4 rounded-xl border border-white/10">
-              <div>
-                <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Site Engineer</span>
-                <span className="font-semibold text-foreground">{selectedIndent?.siteEngineerName || 'N/A'}</span>
+            {/* Work Description & Block/Floor */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Work Description</span>
+                <span className="font-medium text-foreground text-sm">{selectedIndent?.workDescription || '—'}</span>
               </div>
-              <div>
-                <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Store Manager</span>
-                <span className="font-semibold text-foreground">{selectedIndent?.storeManagerName || 'N/A'}</span>
+              <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Block / Floor / Work</span>
+                <span className="font-medium text-foreground text-sm">{selectedIndent?.blockFloorWork || '—'}</span>
+              </div>
+            </div>
+
+            {/* Material Requirements */}
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 border-b border-white/10 pb-2">Material Requirements ({selectedIndent?.items?.length || 0} items)</h4>
+              <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/20">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-white/5 text-muted-foreground font-medium uppercase text-xs">
+                    <tr>
+                      <th className="p-3 border-r border-white/10">#</th>
+                      <th className="p-3 border-r border-white/10">Material Description</th>
+                      <th className="p-3 border-r border-white/10 text-center">Unit</th>
+                      <th className="p-3 border-r border-white/10 text-center">Required Qty</th>
+                      <th className="p-3 border-r border-white/10 text-center">Order Qty</th>
+                      <th className="p-3 text-left">Remark</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {selectedIndent?.items?.length === 0 ? (
+                      <tr><td colSpan="6" className="p-8 text-center text-muted-foreground">No items listed.</td></tr>
+                    ) : (
+                      selectedIndent?.items?.map((item, index) => (
+                        <tr key={index} className="hover:bg-white/5 transition-colors">
+                          <td className="p-3 border-r border-white/10 text-muted-foreground text-xs">{index + 1}</td>
+                          <td className="p-3 border-r border-white/10 text-foreground">{item.materialDescription || '—'}</td>
+                          <td className="p-3 border-r border-white/10 text-center text-muted-foreground">{item.unit || '—'}</td>
+                          <td className="p-3 border-r border-white/10 text-center text-foreground font-semibold">{item.requiredQuantity ?? 0}</td>
+                          <td className="p-3 border-r border-white/10 text-center text-muted-foreground">{item.orderQuantity || '—'}</td>
+                          <td className="p-3 text-muted-foreground text-xs">{item.remark || '—'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 

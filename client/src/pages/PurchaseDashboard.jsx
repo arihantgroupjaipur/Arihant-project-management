@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Plus, RefreshCw, ClipboardList, LogOut, Trash2, Search, X, Loader2, ShoppingCart } from "lucide-react";
+import { Plus, RefreshCw, ClipboardList, LogOut, Trash2, Search, X, Loader2, Receipt, Wallet } from "lucide-react";
 import BackgroundOrbs from "@/components/BackgroundOrbs";
 import TaskForm from "@/components/TaskForm";
 import { getTasks, deleteTask, updateTask } from "@/services/taskService";
@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import BillsList from "@/components/BillsList";
+import PaymentVouchersList from "@/components/PaymentVouchersList";
 
 const PAGE_LIMIT = 20;
 
@@ -27,6 +29,7 @@ const PurchaseDashboard = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { logout } = useAuth();
+    const [activeTab, setActiveTab] = useState("tasks");
     const [showTaskForm, setShowTaskForm] = useState(false);
     const [taskToDelete, setTaskToDelete] = useState(null);
 
@@ -92,7 +95,7 @@ const PurchaseDashboard = () => {
     const handleDelete = (id) => setTaskToDelete(id);
     const confirmDeleteTask = () => { if (taskToDelete) { deleteTaskMutation.mutate(taskToDelete); setTaskToDelete(null); } };
     const handleStatusChange = (id, newStatus) => updateTaskMutation.mutate({ id, status: newStatus });
-    const handleLogout = () => { logout(); navigate("/login"); };
+    const handleLogout = async () => { await logout(); navigate("/login"); };
     const clearSearch = () => { setSearchInput(""); setSearchQuery(""); };
 
     return (
@@ -108,9 +111,17 @@ const PurchaseDashboard = () => {
                     <p className="text-xs text-muted-foreground mt-1">Task &amp; Purchase Management</p>
                 </div>
                 <nav className="flex-1 px-4 space-y-2 py-4">
-                    <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/20 text-primary border border-primary/20 transition-all">
+                    <button onClick={() => setActiveTab("tasks")} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === "tasks" ? "bg-primary/20 text-primary border border-primary/20" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"}`}>
                         <ClipboardList className="w-5 h-5" />
                         <span className="font-medium">Project Tasks</span>
+                    </button>
+                    <button onClick={() => setActiveTab("bills")} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === "bills" ? "bg-primary/20 text-primary border border-primary/20" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"}`}>
+                        <Receipt className="w-5 h-5" />
+                        <span className="font-medium">Bills</span>
+                    </button>
+                    <button onClick={() => setActiveTab("payment-vouchers")} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === "payment-vouchers" ? "bg-primary/20 text-primary border border-primary/20" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"}`}>
+                        <Wallet className="w-5 h-5" />
+                        <span className="font-medium">Payment Vouchers</span>
                     </button>
                 </nav>
                 <div className="p-4 border-t border-white/10">
@@ -130,8 +141,9 @@ const PurchaseDashboard = () => {
                 {/* Top bar */}
                 <header className="h-16 border-b border-white/10 bg-black/10 backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0">
                     <h2 className="text-lg font-semibold text-foreground">
-                        Project Tasks
-                        {total > 0 && <span className="ml-2 text-xs text-muted-foreground font-normal">({total} total)</span>}
+                        {activeTab === "tasks" && <>Project Tasks{total > 0 && <span className="ml-2 text-xs text-muted-foreground font-normal">({total} total)</span>}</>}
+                        {activeTab === "bills" && "Bills"}
+                        {activeTab === "payment-vouchers" && "Payment Vouchers"}
                     </h2>
                     <div className="flex items-center gap-2 md:gap-3">
                         <button
@@ -175,11 +187,14 @@ const PurchaseDashboard = () => {
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-8">
                     <motion.div
+                        key={activeTab}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="max-w-6xl mx-auto"
                     >
-                        {showTaskForm ? (
+                        {activeTab === "bills" && <BillsList />}
+                        {activeTab === "payment-vouchers" && <PaymentVouchersList />}
+                        {activeTab === "tasks" && (showTaskForm ? (
                             <div className="glass-card p-6">
                                 <div className="mb-6 flex items-center justify-between">
                                     <h3 className="text-lg font-semibold">Assign New Task</h3>
@@ -261,7 +276,7 @@ const PurchaseDashboard = () => {
                                                                 <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs font-mono">{task.taskId}</span>
                                                             </td>
                                                             <td className="p-4 text-muted-foreground whitespace-nowrap">
-                                                                {task.createdAt ? format(new Date(task.createdAt), "dd/MM/yyyy hh:mm a") : "—"}
+                                                                {task.createdAt ? format(new Date(task.createdAt), "dd/MM/yyyy hh:mm:ss a") : "—"}
                                                             </td>
                                                             <td className="p-4 text-foreground">{task.workParticulars || "—"}</td>
                                                             <td className="p-4 text-foreground">{task.contractor?.name || task.contractorName || "—"}</td>
@@ -329,7 +344,7 @@ const PurchaseDashboard = () => {
                                     )}
                                 </div>
                             </>
-                        )}
+                        ))}
                     </motion.div>
                 </div>
             </main>

@@ -2,18 +2,10 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Send } from "lucide-react";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import FloatingInput from "@/components/FloatingInput";
 import DailyProgressTable from "@/components/DailyProgressTable";
 import MaterialConsumptionTable from "@/components/MaterialConsumptionTable";
 import { entryService } from "@/services/entryService";
-import { workOrderService } from "@/services/workOrderService";
 import { getSiteLookups } from "@/services/siteLookupService";
 import {
     DropdownMenu,
@@ -25,7 +17,6 @@ import { ChevronDown } from "lucide-react";
 
 const DailyDeploymentForm = ({ onSuccess, initialData }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [workOrders, setWorkOrders] = useState([]);
     const [siteNames, setSiteNames] = useState([]);
     const [formData, setFormData] = useState({
         date: "",
@@ -34,17 +25,13 @@ const DailyDeploymentForm = ({ onSuccess, initialData }) => {
         supervisor: "",
     });
     const [dailyProgressRows, setDailyProgressRows] = useState([
-        { contractorName: "", workOrderNo: "", plannedLabour: "", actualLabour: "", plannedWork: "", actualWork: "", status: "" },
+        { contractorName: "", workOrderNo: "", workName: "", plannedLabour: "", actualLabour: "", plannedWork: "", actualWork: "", status: "" },
     ]);
     const [materialConsumptionRows, setMaterialConsumptionRows] = useState([
-        { materialName: "", totalQuantity: "", unit: "", workOrderReference: "" },
+        { materialName: "", totalQuantity: "", usedTotalQty: "", unit: "", workOrderReference: "", plannedWorkArea: "", actualWorkArea: "" },
     ]);
 
     useEffect(() => {
-        workOrderService.getAllWorkOrders()
-            .then(setWorkOrders)
-            .catch(err => console.error("Failed to fetch work orders", err));
-
         getSiteLookups('siteName')
             .then(data => setSiteNames(data.map(item => item.value)))
             .catch(err => console.error("Failed to fetch site names", err));
@@ -72,18 +59,6 @@ const DailyDeploymentForm = ({ onSuccess, initialData }) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
     };
 
-    const handleSiteSelect = (workOrderNumber) => {
-        const wo = workOrders.find(w => w.workOrderNumber === workOrderNumber);
-        if (wo) {
-            setFormData(prev => ({
-                ...prev,
-                projectName: workOrderNumber,
-                location: wo.workLocationName || wo.addressLocation || prev.location,
-                supervisor: wo.storeKeeperSupervisorName || prev.supervisor,
-            }));
-        }
-    };
-
     const handleWorkOrderSelect = (workOrder) => {
         setFormData(prev => ({
             ...prev,
@@ -102,6 +77,12 @@ const DailyDeploymentForm = ({ onSuccess, initialData }) => {
         const validDailyRows = dailyProgressRows.filter(row => row.contractorName.trim() !== "");
         if (validDailyRows.length === 0) {
             toast.error("Please add at least one entry in Daily Progress Reports");
+            return;
+        }
+
+        const materialRowsMissingUnit = materialConsumptionRows.filter(row => row.materialName.trim() !== "" && row.unit === "");
+        if (materialRowsMissingUnit.length > 0) {
+            toast.error("Please select a unit for all material consumption rows");
             return;
         }
 
@@ -137,10 +118,13 @@ const DailyDeploymentForm = ({ onSuccess, initialData }) => {
                     actualLabour: typeof row.actualLabour === 'number' ? row.actualLabour : 0,
                 })),
                 materialConsumption: materialConsumptionRows
-                    .filter(row => row.materialName.trim() !== "")
+                    .filter(row => row.materialName.trim() !== "" && row.unit !== "")
                     .map(row => ({
                         ...row,
-                        totalQuantity: typeof row.totalQuantity === 'number' ? row.totalQuantity : 0,
+                        totalQuantity: parseFloat(row.totalQuantity) || 0,
+                        usedTotalQty: parseFloat(row.usedTotalQty) || 0,
+                        plannedWorkArea: parseFloat(row.plannedWorkArea) || 0,
+                        actualWorkArea: parseFloat(row.actualWorkArea) || 0,
                     })),
             };
 
@@ -149,7 +133,7 @@ const DailyDeploymentForm = ({ onSuccess, initialData }) => {
                 toast.success("Deployment updated successfully!");
             } else {
                 await entryService.create(payload);
-                toast.success("Daily Deployment submitted successfully!");
+                toast.success("Daily Progress Report submitted successfully!");
             }
 
             onSuccess?.();

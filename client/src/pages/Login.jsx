@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
-import { LogIn, User, Lock, ArrowLeft, Mail } from "lucide-react";
+import { LogIn, User, Lock, ArrowLeft, Mail, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import BackgroundOrbs from "@/components/BackgroundOrbs";
 import FloatingInput from "@/components/FloatingInput";
@@ -15,6 +15,7 @@ const Login = () => {
         email: "",
         password: "",
     });
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleInputChange = (field, value) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -34,7 +35,9 @@ const Login = () => {
             toast.success("Login successful!");
 
             // Redirect based on role
-            if (data.user.role === 'admin') {
+            if (data.user.role === 'super-admin') {
+                navigate("/super-admin");
+            } else if (data.user.role === 'admin') {
                 navigate("/admin");
             } else if (data.user.role === 'project_manager') {
                 navigate("/project-manager");
@@ -131,13 +134,20 @@ const Login = () => {
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none z-10" />
                                 <FloatingInput
-                                    type="password"
+                                    type={showPassword ? "text" : "password"}
                                     label="Password"
                                     value={formData.password}
                                     onChange={(e) => handleInputChange("password", e.target.value)}
-                                    className="pl-11"
+                                    className="pl-11 pr-11"
                                     labelClassName="left-11"
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(v => !v)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors z-10"
+                                >
+                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                </button>
                             </div>
                         </motion.div>
 

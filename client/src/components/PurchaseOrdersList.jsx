@@ -18,6 +18,7 @@ const PurchaseOrdersList = ({
     onEdit,
     onDelete,
     isAdmin,
+    canUpload = false,
     searchQuery,
     filterStatus,
     canChangeStatus,
@@ -66,7 +67,7 @@ const PurchaseOrdersList = ({
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         try {
-            return format(new Date(dateString), 'dd/MM/yyyy');
+            return format(new Date(dateString), 'dd/MM/yyyy HH:mm:ss');
         } catch (error) {
             return dateString;
         }
@@ -137,7 +138,9 @@ const PurchaseOrdersList = ({
                                         <span className="opacity-50">•</span>
                                         <span>Indent: {po.indentReferences?.map(i => i?.indentNumber).join(', ') || 'N/A'}</span>
                                         <span className="opacity-50">•</span>
-                                        <span>Date: {formatDate(po.date)}</span>
+                                        <span>Task No: <strong className="font-medium text-foreground/80">{po.taskReference || 'N/A'}</strong></span>
+                                        <span className="opacity-50">•</span>
+                                        <span>Date: {formatDate(po.createdAt || po.date)}</span>
                                     </p>
                                 </div>
                             </div>
@@ -186,7 +189,7 @@ const PurchaseOrdersList = ({
                                         </motion.button>
 
                                         {/* Upload PDF */}
-                                        {uploadingId === po._id ? (
+                                        {canUpload && (uploadingId === po._id ? (
                                             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 text-muted-foreground ml-2">
                                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                                 <span className="text-xs">Uploading…</span>
@@ -233,7 +236,7 @@ const PurchaseOrdersList = ({
                                                     onChange={(e) => handlePdfUpload(po, e.target.files[0])}
                                                 />
                                             </motion.label>
-                                        )}
+                                        ))}
                                     </div>
                                 )}
 
@@ -289,8 +292,12 @@ const PurchaseOrdersList = ({
                                         {/* Reference Information */}
                                         <div className="grid md:grid-cols-3 gap-6">
                                             <div>
-                                                <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Related Task</p>
+                                                <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Task No</p>
                                                 <p className="font-medium text-sm text-foreground/90">{po.taskReference || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Indent No</p>
+                                                <p className="font-medium text-sm text-foreground/90">{po.indentReferences?.map(i => i?.indentNumber).join(', ') || 'N/A'}</p>
                                             </div>
                                             <div>
                                                 <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Total Items</p>

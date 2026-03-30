@@ -22,6 +22,10 @@ import qaqcRoutes from './routes/qaqc.js';
 import indentRoutes from './routes/indents.js';
 import purchaseOrderRoutes from './routes/purchaseOrders.js';
 import settingsRoutes from './routes/settings.js';
+import logsRoutes from './routes/logs.js';
+import billRoutes from './routes/bills.js';
+import paymentVoucherRoutes from './routes/paymentVouchers.js';
+import siteLookupRoutes from './routes/siteLookups.js';
 
 app.use(passport.initialize());
 const PORT = process.env.PORT || 5001;
@@ -61,12 +65,14 @@ app.use('/api/workcompletions', workCompletionRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/qaqc', qaqcRoutes);
-import siteLookupRoutes from './routes/siteLookups.js';
 app.use('/api/indents', indentRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/site-lookups', siteLookupRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/logs', logsRoutes);
+app.use('/api/bills', billRoutes);
+app.use('/api/payment-vouchers', paymentVoucherRoutes);
 
 app.get('/', (req, res) => {
     res.send('Arihant Dream Infra Projects Limited API is running');

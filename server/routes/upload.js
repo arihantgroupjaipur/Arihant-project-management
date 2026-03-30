@@ -44,6 +44,21 @@ router.post('/', authMiddleware, upload.single('image'), (req, res) => {
     }
 });
 
+// GET /api/upload/view?key=uploads/xxx — Public permanent redirect (no auth needed)
+// Generates a fresh 1-hour signed URL on every request, so the link stored elsewhere never expires
+router.get('/view', async (req, res) => {
+    try {
+        const { key } = req.query;
+        if (!key) return res.status(400).send('Missing key');
+        const command = new GetObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: key });
+        const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+        res.redirect(url);
+    } catch (error) {
+        console.error('View redirect error:', error);
+        res.status(500).send('Failed to generate file URL');
+    }
+});
+
 // GET /api/upload/signed-url?key=uploads/xxx — Generate a temporary pre-signed URL (1 hour)
 router.get('/signed-url', authMiddleware, async (req, res) => {
     try {
