@@ -21,6 +21,21 @@ function permanentFileUrl(key) {
 const CLIENT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 const PRIVATE_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
+function formatDateOnly(value) {
+    if (!value) return '—';
+    try {
+        const dt = new Date(value);
+        if (isNaN(dt)) return String(value);
+        const ist = new Date(dt.getTime() + 5.5 * 60 * 60 * 1000);
+        const dd  = String(ist.getUTCDate()).padStart(2, '0');
+        const mm  = String(ist.getUTCMonth() + 1).padStart(2, '0');
+        const yyyy = ist.getUTCFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+    } catch {
+        return String(value);
+    }
+}
+
 function formatDate(value) {
     if (!value) return '—';
     try {
@@ -102,7 +117,7 @@ export async function syncAllTasksToSheet() {
         const tasks = await Task.find()
             .populate('contractor', 'name')
             .populate('projectManager', 'fullName')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: 1 });
 
         const rows = [
             ['Task ID', 'Work Particulars', 'Contractor', 'Planned Start', 'Planned Finish', 'Duration (Days)', 'Status', 'Project Manager', 'Created At'],
@@ -110,9 +125,9 @@ export async function syncAllTasksToSheet() {
                 t.taskId || '—',
                 t.workParticulars || '—',
                 t.contractor?.name || t.contractorName || '—',
-                formatDate(t.plannedStartDate),
-                formatDate(t.plannedFinishDate),
-                t.duration != null ? t.duration : '—',
+                formatDateOnly(t.plannedStartDate),
+                formatDateOnly(t.plannedFinishDate),
+                t.duration != null ? (parseFloat(t.duration) || t.duration) : '—',
                 t.status || '—',
                 t.projectManager?.fullName || '—',
                 formatDate(t.createdAt),
@@ -130,7 +145,7 @@ export async function syncAllIndentsToSheet() {
         const indents = await Indent.find()
             .populate('createdBy', 'fullName')
             .populate('verifiedBy', 'fullName')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: 1 });
 
         const rows = [
             ['Indent No', 'Date', 'Task Reference', 'Site Engineer', 'Material Group', 'Site Name', 'Work Description', 'Block/Floor', 'Lead Time (Days)', 'Priority', 'Status', 'Items Count', 'Items Summary', 'Verified', 'Verified By', 'Verified PDF', 'Created By', 'Created At'],
@@ -164,7 +179,7 @@ export async function syncAllIndentsToSheet() {
 // ── PURCHASE ORDERS ───────────────────────────────────────────────────────────
 export async function syncAllPurchaseOrdersToSheet() {
     try {
-        const pos = await PurchaseOrder.find().populate('indentReferences').sort({ createdAt: -1 });
+        const pos = await PurchaseOrder.find().populate('indentReferences').sort({ createdAt: 1 });
 
         const rows = [
             ['PO Number', 'Date', 'Indent References', 'Task Reference', 'Vendor Name', 'Vendor Address', 'Vendor GST', 'Vendor Contact', 'Items Count', 'Items Summary', 'Sub Total', 'Freight', 'Total Amount', 'Status', 'Verification Status', 'Prepared By', 'Uploaded PDF', 'Quotation 1', 'Quotation 2', 'Quotation 3', 'Approved Quotation', 'Created At'],
@@ -202,7 +217,7 @@ export async function syncAllPurchaseOrdersToSheet() {
 // ── WORK ORDERS ───────────────────────────────────────────────────────────────
 export async function syncAllWorkOrdersToSheet() {
     try {
-        const workOrders = await WorkOrder.find().populate('createdBy', 'fullName').sort({ createdAt: -1 });
+        const workOrders = await WorkOrder.find().populate('createdBy', 'fullName').sort({ createdAt: 1 });
 
         const rows = [
             ['WO Number', 'Date', 'Main WO Reference', 'Task Reference', 'Work Location', 'Address Location', 'Contact Person', 'Store Keeper / Supervisor', 'Sr.', 'Work Description', 'Planned Labour', 'Work Start Date', 'Work Finish Date', 'Work Area', 'Rate (₹)', 'Item Amount (₹)', 'WO Total Amount (₹)', 'Comments', 'Uploaded PDF', 'Created By', 'Created At'],
@@ -246,7 +261,7 @@ export async function syncAllWorkOrdersToSheet() {
 // ── WORK COMPLETIONS ──────────────────────────────────────────────────────────
 export async function syncAllWorkCompletionsToSheet() {
     try {
-        const completions = await WorkCompletion.find().populate('createdBy', 'fullName').sort({ createdAt: -1 });
+        const completions = await WorkCompletion.find().populate('createdBy', 'fullName').sort({ createdAt: 1 });
 
         const rows = [
             ['WO Number', 'Date', 'Block/Tower', 'Floor/Zone', 'Work Trade', 'Specific Activity', 'Contractor', 'Bill No', 'Engineer', 'Start Date', 'End Date', 'Duration', 'QC Remarks', 'Materials Count', 'Materials Summary', 'Pre-Work Checks', 'During-Work Checks', 'Post-Work Checks', 'Uploaded PDF', 'Created By', 'Created At'],
@@ -288,7 +303,7 @@ export async function syncAllWorkCompletionsToSheet() {
 // ── DAILY PROGRESS REPORTS (ENTRIES) ─────────────────────────────────────────
 export async function syncAllEntriesToSheet() {
     try {
-        const entries = await Entry.find().sort({ createdAt: -1 });
+        const entries = await Entry.find().sort({ createdAt: 1 });
 
         const rows = [
             ['Date', 'Site / Project', 'Location', 'Supervisor', 'Total Workers', 'Contractors', 'Progress Reports Count', 'Material Items Count', 'Material Summary', 'Created At'],
@@ -315,7 +330,7 @@ export async function syncAllEntriesToSheet() {
 // ── BILLS ─────────────────────────────────────────────────────────────────────
 export async function syncAllBillsToSheet() {
     try {
-        const bills = await Bill.find().populate('createdBy', 'fullName').sort({ createdAt: -1 });
+        const bills = await Bill.find().populate('createdBy', 'fullName').sort({ createdAt: 1 });
 
         const rows = [
             ['Bill No.', 'Date', 'Contractor Name', 'WO/PO Number', 'Description', 'Amount (₹)', 'Status', 'Remarks', 'Uploaded Files', 'Created By', 'Created At'],
