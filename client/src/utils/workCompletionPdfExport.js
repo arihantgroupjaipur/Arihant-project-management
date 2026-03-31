@@ -5,12 +5,13 @@ const fmtTs = (d) => {
     if (!d) return '—';
     const dt = new Date(d);
     if (isNaN(dt)) return '—';
-    const dd = String(dt.getDate()).padStart(2,'0');
-    const mm = String(dt.getMonth()+1).padStart(2,'0');
-    const yyyy = dt.getFullYear();
-    const hh = String(dt.getHours()).padStart(2,'0');
-    const min = String(dt.getMinutes()).padStart(2,'0');
-    const ss = String(dt.getSeconds()).padStart(2,'0');
+    const ist = new Date(dt.getTime() + 5.5 * 60 * 60 * 1000);
+    const dd = String(ist.getUTCDate()).padStart(2,'0');
+    const mm = String(ist.getUTCMonth()+1).padStart(2,'0');
+    const yyyy = ist.getUTCFullYear();
+    const hh = String(ist.getUTCHours()).padStart(2,'0');
+    const min = String(ist.getUTCMinutes()).padStart(2,'0');
+    const ss = String(ist.getUTCSeconds()).padStart(2,'0');
     return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
 };
 
@@ -133,8 +134,8 @@ export const generateWorkCompletionPDF = async (completion) => {
     // Row 3: Engineer Name, Work Start Date, Work End Date
     yPos = drawRow3([
         { label: 'Engineer Name', value: completion.engineerName },
-        { label: 'Work Start Date', value: completion.workStartDate ? new Date(completion.workStartDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '' },
-        { label: 'Work End Date', value: completion.workEndDate ? new Date(completion.workEndDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '' }
+        { label: 'Work Start Date', value: completion.workStartDate ? new Date(completion.workStartDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '' },
+        { label: 'Work End Date', value: completion.workEndDate ? new Date(completion.workEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '' }
     ], yPos);
 
     // Row 4: Total Work Duration (spans 2 cols)
@@ -154,8 +155,8 @@ export const generateWorkCompletionPDF = async (completion) => {
         completion.workExecutionRows.forEach(row => {
             workExecutionData.push([
                 row.summary || '',
-                row.startDate ? new Date(row.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
-                row.endDate ? new Date(row.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
+                row.startDate ? new Date(row.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '',
+                row.endDate ? new Date(row.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '',
                 row.timeDelay || '',
                 row.actual || '',
                 row.completionPercent ? `${row.completionPercent}%` : ''
@@ -391,7 +392,7 @@ export const generateWorkCompletionPDF = async (completion) => {
     doc.setFont('helvetica', 'bold');
     doc.text('Date', sigX + 2, yPos);
     doc.setFont('helvetica', 'normal');
-    const confirmationDateFormatted = completion.confirmationDate ? new Date(completion.confirmationDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+    const confirmationDateFormatted = completion.confirmationDate ? new Date(completion.confirmationDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '';
     doc.text(`: ${confirmationDateFormatted}`, sigX + 10, yPos);
 
     // Save the PDF

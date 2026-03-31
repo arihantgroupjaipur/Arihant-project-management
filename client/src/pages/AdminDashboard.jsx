@@ -216,7 +216,7 @@ const LogsPanel = () => {
                     {ROLE_LABEL[s.role] || s.role}
                   </span>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Since {new Date(s.loginAt).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: 'short' })}
+                    Since {new Date(s.loginAt).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' })}
                   </p>
                 </div>
                 {s.userId !== user?._id && s.userId !== user?.id && (
@@ -274,7 +274,7 @@ const LogsPanel = () => {
                     <span className="text-xs text-muted-foreground">{log.performedBy || 'System'}</span>
                     <span className="text-xs text-muted-foreground/50">·</span>
                     <span className="text-xs text-muted-foreground">
-                      {log.createdAt ? new Date(log.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''}
+                      {log.createdAt ? new Date(log.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Kolkata' }) : ''}
                     </span>
                   </div>
                 </div>
@@ -716,7 +716,7 @@ const AdminDashboard = () => {
 
   // Global loading state
   const isRefreshing = useIsFetching() > 0;
-  const lastUpdate = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const lastUpdate = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Kolkata' });
 
   const deleteTaskMutation = useMutation({
     mutationFn: deleteTask,

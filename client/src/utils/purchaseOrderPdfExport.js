@@ -5,12 +5,13 @@ const fmtTs = (d) => {
     if (!d) return '—';
     const dt = new Date(d);
     if (isNaN(dt)) return '—';
-    const dd = String(dt.getDate()).padStart(2,'0');
-    const mm = String(dt.getMonth()+1).padStart(2,'0');
-    const yyyy = dt.getFullYear();
-    const hh = String(dt.getHours()).padStart(2,'0');
-    const min = String(dt.getMinutes()).padStart(2,'0');
-    const ss = String(dt.getSeconds()).padStart(2,'0');
+    const ist = new Date(dt.getTime() + 5.5 * 60 * 60 * 1000);
+    const dd = String(ist.getUTCDate()).padStart(2,'0');
+    const mm = String(ist.getUTCMonth()+1).padStart(2,'0');
+    const yyyy = ist.getUTCFullYear();
+    const hh = String(ist.getUTCHours()).padStart(2,'0');
+    const min = String(ist.getUTCMinutes()).padStart(2,'0');
+    const ss = String(ist.getUTCSeconds()).padStart(2,'0');
     return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
 };
 
@@ -54,8 +55,8 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
             try { doc.addImage(logoData, 'PNG', ML, 10, 25, 25); } catch { /* skip */ }
         }
 
-        const today = new Date().toLocaleDateString('en-US', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        const today = new Date().toLocaleDateString('en-IN', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Kolkata',
         });
         doc.setFontSize(9); doc.setTextColor(100);
         doc.text(today, PW - MR, 15, { align: 'right' });
@@ -371,7 +372,7 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
         doc.line(ML, FOOTER_Y - 4, PW - MR, FOOTER_Y - 4);
         doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(150);
         doc.text(
-            `Page ${p} of ${totalPages}  ·  Generated ${new Date().toLocaleString()}`,
+            `Page ${p} of ${totalPages}  ·  Generated ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}`,
             PW / 2, FOOTER_Y, { align: 'center' }
         );
     }

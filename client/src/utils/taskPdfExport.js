@@ -37,11 +37,12 @@ export const generateTaskPDF = async (tasks) => {
     // Add date at top right
     doc.setFontSize(10);
     doc.setTextColor(100);
-    const today = new Date().toLocaleDateString('en-US', {
+    const today = new Date().toLocaleDateString('en-IN', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
-        day: 'numeric'
+        day: 'numeric',
+        timeZone: 'Asia/Kolkata'
     });
     doc.text(today, pageWidth - 15, 15, { align: 'right' });
 
@@ -78,8 +79,8 @@ export const generateTaskPDF = async (tasks) => {
         t.taskId || '-',
         t.workParticulars || '-',
         t.contractor?.name || t.contractorName || '-',
-        t.plannedStartDate ? new Date(t.plannedStartDate).toLocaleDateString() : '-',
-        t.plannedFinishDate ? new Date(t.plannedFinishDate).toLocaleDateString() : '-',
+        t.plannedStartDate ? new Date(t.plannedStartDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '-',
+        t.plannedFinishDate ? new Date(t.plannedFinishDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '-',
         t.duration ? `${t.duration} days` : '-',
         t.status || 'Pending'
     ]);

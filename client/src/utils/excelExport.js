@@ -4,12 +4,13 @@ const fmtTs = (d) => {
     if (!d) return '';
     const dt = new Date(d);
     if (isNaN(dt)) return '';
-    const dd = String(dt.getDate()).padStart(2,'0');
-    const mm = String(dt.getMonth()+1).padStart(2,'0');
-    const yyyy = dt.getFullYear();
-    const hh = String(dt.getHours()).padStart(2,'0');
-    const min = String(dt.getMinutes()).padStart(2,'0');
-    const ss = String(dt.getSeconds()).padStart(2,'0');
+    const ist = new Date(dt.getTime() + 5.5 * 60 * 60 * 1000);
+    const dd = String(ist.getUTCDate()).padStart(2,'0');
+    const mm = String(ist.getUTCMonth()+1).padStart(2,'0');
+    const yyyy = ist.getUTCFullYear();
+    const hh = String(ist.getUTCHours()).padStart(2,'0');
+    const min = String(ist.getUTCMinutes()).padStart(2,'0');
+    const ss = String(ist.getUTCSeconds()).padStart(2,'0');
     return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
 };
 

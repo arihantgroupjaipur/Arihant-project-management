@@ -4,12 +4,13 @@ const fmtTs = (d) => {
     if (!d) return '';
     const dt = new Date(d);
     if (isNaN(dt)) return '';
-    const dd = String(dt.getDate()).padStart(2,'0');
-    const mm = String(dt.getMonth()+1).padStart(2,'0');
-    const yyyy = dt.getFullYear();
-    const hh = String(dt.getHours()).padStart(2,'0');
-    const min = String(dt.getMinutes()).padStart(2,'0');
-    const ss = String(dt.getSeconds()).padStart(2,'0');
+    const ist = new Date(dt.getTime() + 5.5 * 60 * 60 * 1000);
+    const dd = String(ist.getUTCDate()).padStart(2,'0');
+    const mm = String(ist.getUTCMonth()+1).padStart(2,'0');
+    const yyyy = ist.getUTCFullYear();
+    const hh = String(ist.getUTCHours()).padStart(2,'0');
+    const min = String(ist.getUTCMinutes()).padStart(2,'0');
+    const ss = String(ist.getUTCSeconds()).padStart(2,'0');
     return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
 };
 
@@ -36,8 +37,8 @@ export const generateWorkCompletionExcel = (completion) => {
         ['Contractor Name', completion.contractorName],
         ['Bill No.', completion.billNo || ''],
         ['Engineer Name', completion.engineerName],
-        ['Work Start Date', completion.workStartDate ? new Date(completion.workStartDate).toLocaleDateString('en-GB') : ''],
-        ['Work End Date', completion.workEndDate ? new Date(completion.workEndDate).toLocaleDateString('en-GB') : ''],
+        ['Work Start Date', completion.workStartDate ? new Date(completion.workStartDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : ''],
+        ['Work End Date', completion.workEndDate ? new Date(completion.workEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : ''],
         ['Total Work Duration', completion.totalWorkDuration || ''],
         []
     ];
@@ -50,8 +51,8 @@ export const generateWorkCompletionExcel = (completion) => {
         completion.workExecutionRows.forEach(row => {
             basicInfoData.push([
                 row.summary || '',
-                row.startDate ? new Date(row.startDate).toLocaleDateString('en-GB') : '',
-                row.endDate ? new Date(row.endDate).toLocaleDateString('en-GB') : '',
+                row.startDate ? new Date(row.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '',
+                row.endDate ? new Date(row.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '',
                 row.timeDelay || '',
                 row.actual || '',
                 row.completionPercent || ''
@@ -93,7 +94,7 @@ export const generateWorkCompletionExcel = (completion) => {
 
     // Confirmation
     basicInfoData.push(['Contractor Confirmation']);
-    basicInfoData.push(['Confirmation Date', completion.confirmationDate ? new Date(completion.confirmationDate).toLocaleDateString('en-GB') : '']);
+    basicInfoData.push(['Confirmation Date', completion.confirmationDate ? new Date(completion.confirmationDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '']);
 
     // Create worksheet
     const ws = XLSX.utils.aoa_to_sheet(basicInfoData);
