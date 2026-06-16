@@ -63,6 +63,8 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
         preparedBy: "",
         verifiedBy: "",
         authorizedBy: "",
+        approvedBy: "",
+        customAuthFields: [],
 
         status: "Pending",
 
@@ -121,6 +123,8 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                 preparedBy: initialData.preparedBy || "",
                 verifiedBy: initialData.verifiedBy || "",
                 authorizedBy: initialData.authorizedBy || "",
+                approvedBy: initialData.approvedBy || "",
+                customAuthFields: initialData.customAuthFields || [],
 
                 status: initialData.status || "Pending",
 
@@ -800,33 +804,92 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
             </div>
 
             {/* Authorizations Section */}
-            <div className="grid md:grid-cols-3 gap-4 pt-6 border-t border-white/10 mt-6">
-                <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Prepared By</label>
-                    <input
-                        type="text"
-                        value={formData.preparedBy}
-                        onChange={(e) => handleInputChange("preparedBy", e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
-                    />
+            <div className="pt-6 border-t border-white/10 mt-6 space-y-4">
+                <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Authorizations</span>
+                    <button
+                        type="button"
+                        onClick={() => handleInputChange("customAuthFields", [...formData.customAuthFields, { label: "", value: "" }])}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-all"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Field
+                    </button>
                 </div>
-                <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Verified By</label>
-                    <input
-                        type="text"
-                        value={formData.verifiedBy}
-                        onChange={(e) => handleInputChange("verifiedBy", e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
-                    />
-                </div>
-                <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Authorized By</label>
-                    <input
-                        type="text"
-                        value={formData.authorizedBy}
-                        onChange={(e) => handleInputChange("authorizedBy", e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
-                    />
+                <div className="grid md:grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Prepared By</label>
+                        <input
+                            type="text"
+                            value={formData.preparedBy}
+                            onChange={(e) => handleInputChange("preparedBy", e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Verified By</label>
+                        <input
+                            type="text"
+                            value={formData.verifiedBy}
+                            onChange={(e) => handleInputChange("verifiedBy", e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Approved By</label>
+                        <input
+                            type="text"
+                            value={formData.approvedBy}
+                            onChange={(e) => handleInputChange("approvedBy", e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Authorized By</label>
+                        <input
+                            type="text"
+                            value={formData.authorizedBy}
+                            onChange={(e) => handleInputChange("authorizedBy", e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                        />
+                    </div>
+                    {formData.customAuthFields.map((field, idx) => (
+                        <div key={idx} className="space-y-2">
+                            <div className="flex items-center gap-1">
+                                <input
+                                    type="text"
+                                    placeholder="Field Name"
+                                    value={field.label}
+                                    onChange={(e) => {
+                                        const updated = [...formData.customAuthFields];
+                                        updated[idx] = { ...updated[idx], label: e.target.value };
+                                        handleInputChange("customAuthFields", updated);
+                                    }}
+                                    className="flex-1 bg-white/5 border border-primary/30 rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all uppercase tracking-widest placeholder:normal-case placeholder:tracking-normal"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const updated = formData.customAuthFields.filter((_, i) => i !== idx);
+                                        handleInputChange("customAuthFields", updated);
+                                    }}
+                                    className="text-red-400 hover:text-red-300 transition-colors"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                            <input
+                                type="text"
+                                value={field.value}
+                                onChange={(e) => {
+                                    const updated = [...formData.customAuthFields];
+                                    updated[idx] = { ...updated[idx], value: e.target.value };
+                                    handleInputChange("customAuthFields", updated);
+                                }}
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                            />
+                        </div>
+                    ))}
                 </div>
             </div>
 

@@ -17,15 +17,6 @@ export const generatePurchaseOrderCSV = (purchaseOrders) => {
         throw new Error('No Purchase Orders to export');
     }
 
-    const headers = [
-        'PO Number', 'Date', 'Status', 'Indent Reference', 'Task Reference',
-        'Vendor Name', 'Vendor Address', 'Vendor GST', 'Vendor Contact',
-        'Ship To Company', 'Ship To Address', 'Ship To Person', 'Ship To Contact',
-        'Subtotal', 'Round off', 'Grand Total', 'Comments',
-        'Prepared By', 'Requisitioned By', 'Verified By', 'Authorized By',
-        'Item Description', 'Unit', 'QTY', 'Rate', 'Base', 'Tax', 'Amount'
-    ];
-
     const escapeCsvRef = (field) => {
         if (field === null || field === undefined) return '';
         const stringField = String(field);
@@ -35,10 +26,30 @@ export const generatePurchaseOrderCSV = (purchaseOrders) => {
         return stringField;
     };
 
+    // Collect all unique custom auth field labels across all POs
+    const customAuthLabels = [];
+    purchaseOrders.forEach(po => {
+        (po.customAuthFields || []).forEach(f => {
+            if (f.label && !customAuthLabels.includes(f.label)) customAuthLabels.push(f.label);
+        });
+    });
+
+    const headers = [
+        'PO Number', 'Date', 'Status', 'Indent Reference', 'Task Reference',
+        'Vendor Name', 'Vendor Address', 'Vendor GST', 'Vendor Contact',
+        'Ship To Company', 'Ship To Address', 'Ship To Person', 'Ship To Contact',
+        'Subtotal', 'Round off', 'Grand Total', 'Comments',
+        'Prepared By', 'Requisitioned By', 'Verified By', 'Approved By', 'Authorized By',
+        ...customAuthLabels,
+        'Item Description', 'Unit', 'QTY', 'Rate', 'Base', 'Tax', 'Amount'
+    ];
+
     let csvContent = headers.join(',') + '\n';
 
     purchaseOrders.forEach(po => {
         const indentNum = po.indentReferences?.map(i => i?.indentNumber || i).join(', ') || '';
+        const customAuthMap = {};
+        (po.customAuthFields || []).forEach(f => { if (f.label) customAuthMap[f.label] = f.value || ''; });
 
         const baseRow = [
             escapeCsvRef(po.poNumber),
@@ -61,7 +72,9 @@ export const generatePurchaseOrderCSV = (purchaseOrders) => {
             escapeCsvRef(po.preparedBy),
             escapeCsvRef(po.requisitionedBy),
             escapeCsvRef(po.verifiedBy),
-            escapeCsvRef(po.authorizedBy)
+            escapeCsvRef(po.approvedBy),
+            escapeCsvRef(po.authorizedBy),
+            ...customAuthLabels.map(label => escapeCsvRef(customAuthMap[label] || ''))
         ];
 
         if (po.items && po.items.length > 0) {

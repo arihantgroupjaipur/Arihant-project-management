@@ -32,6 +32,21 @@ export const exportMaterialVerificationXlsx = (pos) => {
             ]);
         });
 
+        // Authorization footer
+        rows.push([]);
+        rows.push([
+            'Prepared By (Store Supervisor/Keeper)', '',
+            'Verified By (Site Engineer)', '',
+            'Checked By (Purchase Executive)', '',
+            'Authorized By (Project Manager)'
+        ]);
+        rows.push([
+            po.preparedBy || '',  '',
+            po.verifiedBy || '',  '',
+            po.checkedBy || '',   '',
+            po.authorizedBy || ''
+        ]);
+
         // Receipts
         if (po.receipts && po.receipts.length > 0) {
             rows.push([]);

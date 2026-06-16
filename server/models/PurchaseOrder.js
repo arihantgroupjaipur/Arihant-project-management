@@ -86,6 +86,8 @@ const purchaseOrderSchema = new mongoose.Schema({
     requisitionedBy: { type: String, trim: true },
     verifiedBy: { type: String, trim: true },
     authorizedBy: { type: String, trim: true },
+    approvedBy: { type: String, trim: true },
+    customAuthFields: [{ label: { type: String, trim: true }, value: { type: String, trim: true } }],
 
     // Quotations
     quotation1Url: { type: String },

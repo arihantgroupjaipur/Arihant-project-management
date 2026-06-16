@@ -201,14 +201,21 @@ export const generateMaterialVerificationPdf = async (pos, showLogo = true) => {
             doc.setFontSize(9);
             doc.setFont("helvetica", "normal");
 
-            doc.text("Prepared By", 30, yPos, { align: "center" });
-            doc.text("Verified By", pageWidth / 2, yPos, { align: "center" });
-            doc.text("Authorized By", pageWidth - 30, yPos, { align: "center" });
+            const c1 = pageWidth * 1 / 8;
+            const c2 = pageWidth * 3 / 8;
+            const c3 = pageWidth * 5 / 8;
+            const c4 = pageWidth * 7 / 8;
+
+            doc.text("Prepared By", c1, yPos, { align: "center" });
+            doc.text("Verified By", c2, yPos, { align: "center" });
+            doc.text("Checked By", c3, yPos, { align: "center" });
+            doc.text("Authorized By", c4, yPos, { align: "center" });
 
             doc.setFontSize(8);
-            doc.text("(Store Supervisor)", 30, yPos + 5, { align: "center" });
-            doc.text("(Project Manager)", pageWidth / 2, yPos + 5, { align: "center" });
-            doc.text("(Director)", pageWidth - 30, yPos + 5, { align: "center" });
+            doc.text("(Store Supervisor/Keeper)", c1, yPos + 5, { align: "center" });
+            doc.text("(Site Engineer)", c2, yPos + 5, { align: "center" });
+            doc.text("(Purchase Executive)", c3, yPos + 5, { align: "center" });
+            doc.text("(Project Manager)", c4, yPos + 5, { align: "center" });
         });
 
         // Use PO number for single export, otherwise plural

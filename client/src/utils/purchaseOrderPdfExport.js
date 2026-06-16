@@ -335,12 +335,15 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
         const AUTH_H = 22;
         checkBreak(AUTH_H);
 
+        const customCols = (po.customAuthFields || []).filter(f => f.label).map(f => ({ label: f.label, name: f.value || '—' }));
         const authCols = [
             { label: 'Prepared By',   name: po.preparedBy   || '—' },
             { label: 'Verified By',   name: po.verifiedBy   || '—' },
+            { label: 'Approved By',   name: po.approvedBy   || '—' },
             { label: 'Authorized By', name: po.authorizedBy || '—' },
+            ...customCols,
         ];
-        const colW = USABLE_W / 3;
+        const colW = USABLE_W / authCols.length;
 
         authCols.forEach((col, i) => {
             const cx = ML + i * colW;

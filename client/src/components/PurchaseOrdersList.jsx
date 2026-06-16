@@ -441,19 +441,31 @@ const PurchaseOrdersList = ({
                                         </div>
 
                                         {/* Authorizations Bar */}
-                                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 pt-4 border-t border-white/10 text-sm">
-                                            <div className="bg-black/20 p-3 rounded-lg border border-white/5">
+                                        <div className="flex flex-wrap gap-4 pt-4 border-t border-white/10 text-sm">
+                                            <div className="bg-black/20 p-3 rounded-lg border border-white/5 min-w-[140px]">
                                                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Prepared By</p>
                                                 <p className="font-medium text-foreground/90">{po.preparedBy || "-"}</p>
                                             </div>
-                                            <div className="bg-black/20 p-3 rounded-lg border border-white/5">
+                                            <div className="bg-black/20 p-3 rounded-lg border border-white/5 min-w-[140px]">
                                                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Verified By</p>
                                                 <p className="font-medium text-foreground/90">{po.verifiedBy || "-"}</p>
                                             </div>
-                                            <div className="bg-black/20 p-3 rounded-lg border border-white/5">
+                                            <div className="bg-black/20 p-3 rounded-lg border border-white/5 min-w-[140px]">
                                                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Authorized By</p>
                                                 <p className="font-medium text-foreground/90">{po.authorizedBy || "-"}</p>
                                             </div>
+                                            {po.approvedBy && (
+                                                <div className="bg-black/20 p-3 rounded-lg border border-white/5 min-w-[140px]">
+                                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Approved By</p>
+                                                    <p className="font-medium text-foreground/90">{po.approvedBy}</p>
+                                                </div>
+                                            )}
+                                            {(po.customAuthFields || []).filter(f => f.label).map((f, idx) => (
+                                                <div key={idx} className="bg-black/20 p-3 rounded-lg border border-white/5 min-w-[140px]">
+                                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">{f.label}</p>
+                                                    <p className="font-medium text-foreground/90">{f.value || "-"}</p>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </motion.div>

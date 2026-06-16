@@ -7,11 +7,20 @@ export const exportMaterialVerificationCsv = (pos) => {
     rows.push([
         'PO Number', 'Date', 'Vendor Name', 'Vendor Contact',
         'Vendor Address', 'GST', 'Task Ref', 'Indent Ref',
-        'Status', 'S.No', 'Material Description', 'Unit', 'Ordered Qty', 'Received Qty'
+        'Status', 'S.No', 'Material Description', 'Unit', 'Ordered Qty', 'Received Qty',
+        'Prepared By (Store Supervisor/Keeper)', 'Verified By (Site Engineer)',
+        'Checked By (Purchase Executive)', 'Authorized By (Project Manager)'
     ]);
 
     pos.forEach((po) => {
         const items = po.items || [];
+        const authCols = [
+            po.preparedBy || '',
+            po.verifiedBy || '',
+            po.checkedBy || '',
+            po.authorizedBy || '',
+        ];
+
         if (items.length === 0) {
             rows.push([
                 po.poNumber || '',
@@ -23,7 +32,8 @@ export const exportMaterialVerificationCsv = (pos) => {
                 po.taskReference || '',
                 po.indentReferences?.map(i => i?.indentNumber).join(', ') || '',
                 po.materialVerificationStatus || 'Pending',
-                '', '', '', '', ''
+                '', '', '', '', '',
+                ...authCols
             ]);
         } else {
             items.forEach((item, idx) => {
@@ -42,6 +52,7 @@ export const exportMaterialVerificationCsv = (pos) => {
                     item.unit || '',
                     item.quantity || 0,
                     item.receivedQuantity || 0,
+                    ...authCols
                 ]);
             });
         }
