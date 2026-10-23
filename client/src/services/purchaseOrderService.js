@@ -122,6 +122,16 @@ export const removePurchaseOrderPdf = async (id) => {
 };
 
 
+// Emails the PO PDF (generated client-side, passed as base64) to the vendor
+export const sendPurchaseOrderToVendor = async (id, pdfBase64) => {
+    try {
+        const response = await api.post(`/purchase-orders/${id}/send-to-vendor`, { pdfBase64 });
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || 'Failed to send PO to vendor');
+    }
+};
+
 export default {
     createPurchaseOrder,
     getPurchaseOrders,
@@ -133,5 +143,6 @@ export default {
     updateDeliveryReceipt,
     deleteDeliveryReceipt,
     uploadPurchaseOrderPdf,
-    removePurchaseOrderPdf
+    removePurchaseOrderPdf,
+    sendPurchaseOrderToVendor,
 };

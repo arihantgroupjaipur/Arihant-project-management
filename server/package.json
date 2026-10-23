@@ -12,6 +12,7 @@
         "node": ">=18.0.0"
     },
     "dependencies": {
+        "@anthropic-ai/sdk": "^0.124.0",
         "@aws-sdk/client-s3": "^3.993.0",
         "@aws-sdk/s3-request-presigner": "^3.995.0",
         "bcryptjs": "^2.4.3",
@@ -23,6 +24,7 @@
         "mongoose": "^8.3.2",
         "multer": "^2.0.2",
         "multer-s3": "^3.0.1",
+        "node-cron": "^4.6.0",
         "passport": "^0.7.0",
         "passport-github2": "^0.1.12",
         "passport-google-oauth20": "^2.0.0",

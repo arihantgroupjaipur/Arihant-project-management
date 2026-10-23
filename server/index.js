@@ -4,6 +4,9 @@ dotenv.config();
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
+import cron from 'node-cron';
+import { checkAndSendVendorDelayReminders } from './utils/vendorDelayCheck.js';
+import { processDueScheduledCeoReports } from './utils/ceoReportEmail.js';
 
 
 const app = express();
@@ -26,6 +29,9 @@ import logsRoutes from './routes/logs.js';
 import billRoutes from './routes/bills.js';
 import paymentVoucherRoutes from './routes/paymentVouchers.js';
 import siteLookupRoutes from './routes/siteLookups.js';
+import aiRoutes from './routes/ai.js';
+import reportRoutes from './routes/reports.js';
+import procurementRoutes from './routes/procurement.js';
 
 app.use(passport.initialize());
 const PORT = process.env.PORT || 5001;
@@ -73,9 +79,33 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/logs', logsRoutes);
 app.use('/api/bills', billRoutes);
 app.use('/api/payment-vouchers', paymentVoucherRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/procurement', procurementRoutes);
 
 app.get('/', (req, res) => {
     res.send('Arihant Dream Infra Projects Limited API is running');
+});
+
+// Every 5 minutes — check for POs whose Expected Delivery Date/Time has just passed
+// and send an AI-written delay reminder email to the vendor, so it fires close to the set time
+cron.schedule('*/5 * * * *', () => {
+    checkAndSendVendorDelayReminders().catch((err) => console.error('Vendor delay check failed:', err));
+}, { timezone: 'Asia/Kolkata' });
+
+// Every 5 minutes — send any scheduled CEO audio briefings whose time has arrived
+cron.schedule('*/5 * * * *', () => {
+    processDueScheduledCeoReports().catch((err) => console.error('Scheduled CEO report check failed:', err));
+}, { timezone: 'Asia/Kolkata' });
+
+// Safety nets so one bad async call (a missed try/catch in a route, a stray promise in the AI/
+// cron code) logs instead of taking the entire server down for every user.
+process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled promise rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught exception:', err);
 });
 
 // Start Server

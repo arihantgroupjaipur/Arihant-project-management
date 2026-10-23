@@ -14,6 +14,7 @@ const siteLookupSchema = new mongoose.Schema({
     vendorAddress: { type: String, trim: true },
     vendorGst: { type: String, trim: true },
     vendorContactNo: { type: String, trim: true },
+    vendorEmail: { type: String, trim: true },
 }, { timestamps: true });
 
 // Unique per type+value pair

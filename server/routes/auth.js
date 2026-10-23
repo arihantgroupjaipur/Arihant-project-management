@@ -8,6 +8,7 @@ const router = express.Router();
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/emailService.js';
 import { logActivity } from '../utils/activityLogger.js';
 import ActiveSession from '../models/ActiveSession.js';
+import { JWT_SECRET } from '../config/jwt.js';
 
 // @route   POST /api/auth/register
 // @desc    Register new user
@@ -94,10 +95,13 @@ router.post('/verify-email', async (req, res) => {
 
         jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret_key_123',
+            JWT_SECRET,
             { expiresIn: '1d' },
             (err, token) => {
-                if (err) throw err;
+                if (err) {
+                    console.error('JWT sign error (verify-email):', err);
+                    return res.status(500).json({ message: 'Failed to generate token' });
+                }
                 res.json({ token, user: payload, message: 'Email verified successfully' });
             }
         );
@@ -154,10 +158,13 @@ router.post('/login', async (req, res) => {
         ).catch(err => console.error('[Session] upsert error:', err.message));
         jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret_key_123',
+            JWT_SECRET,
             { expiresIn: '1d' },
             (err, token) => {
-                if (err) throw err;
+                if (err) {
+                    console.error('JWT sign error (login):', err);
+                    return res.status(500).json({ message: 'Failed to generate token' });
+                }
                 res.json({ token, user: payload });
             }
         );
@@ -239,7 +246,7 @@ router.post('/logout', async (req, res) => {
         const authHeader = req.headers.authorization;
         if (authHeader?.startsWith('Bearer ')) {
             const token = authHeader.split(' ')[1];
-            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key_123');
+            const decoded = jwt.verify(token, JWT_SECRET);
             logActivity('OTHER', 'Auth', `User logged out: ${decoded.email} (role: ${decoded.role})`, decoded.email, decoded.email);
             ActiveSession.findOneAndDelete({ userId: decoded.id }).catch(() => {});
         }
@@ -287,10 +294,13 @@ router.get('/google/callback',
         ).catch(err => console.error('[Session] upsert error:', err.message));
         jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret_key_123',
+            JWT_SECRET,
             { expiresIn: '1d' },
             (err, token) => {
-                if (err) throw err;
+                if (err) {
+                    console.error('JWT sign error (google callback):', err);
+                    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=auth_failed`);
+                }
                 res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth-callback?token=${token}`);
             }
         );
@@ -343,10 +353,13 @@ router.get('/github/callback',
         ).catch(err => console.error('[Session] upsert error:', err.message));
         jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret_key_123',
+            JWT_SECRET,
             { expiresIn: '1d' },
             (err, token) => {
-                if (err) throw err;
+                if (err) {
+                    console.error('JWT sign error (github callback):', err);
+                    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=auth_failed`);
+                }
                 res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth-callback?token=${token}`);
             }
         );

@@ -75,6 +75,27 @@ async function getSheetsConfigForKey(settingKey) {
     return { sheets: google.sheets({ version: 'v4', auth }), sheetIds };
 }
 
+// Reads a reference sheet (e.g. BOQ/BOM, IMS) configured via a single Setting key and returns its rows
+// as plain objects keyed by the sheet's own header row (row 1) — no assumptions about column names/order.
+export async function readSheetAsObjects(settingKey, tabName) {
+    const { sheets, sheetIds } = await getSheetsConfigForKey(settingKey);
+    const spreadsheetId = sheetIds[0]; // reference sheets are a single source, not multi-destination sync targets
+
+    const range = tabName ? `${tabName}` : 'A:ZZ';
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+    const rows = res.data.values || [];
+    if (rows.length === 0) return [];
+
+    const headers = rows[0].map((h) => String(h ?? '').trim());
+    return rows.slice(1)
+        .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''))
+        .map((row) => {
+            const obj = {};
+            headers.forEach((h, i) => { obj[h || `Column${i + 1}`] = row[i] ?? ''; });
+            return obj;
+        });
+}
+
 async function ensureTabExists(sheets, spreadsheetId, tabName) {
     const meta = await sheets.spreadsheets.get({ spreadsheetId });
     const exists = meta.data.sheets.some(s => s.properties.title === tabName);

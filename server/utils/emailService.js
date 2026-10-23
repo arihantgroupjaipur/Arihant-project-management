@@ -9,13 +9,17 @@ apiKey.apiKey = process.env.BREVO_API_KEY;
 
 const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
-export const sendEmail = async (to, subject, htmlContent) => {
+// attachments: [{ name, content }] — content is base64-encoded string
+export const sendEmail = async (to, subject, htmlContent, attachments = []) => {
     const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
 
     sendSmtpEmail.subject = subject;
     sendSmtpEmail.htmlContent = htmlContent;
     sendSmtpEmail.sender = { name: "Arihant Dream Infra Projects Limited", email: process.env.SENDER_EMAIL }; // Ensure SENDER_EMAIL is in .env or hardcode a verified sender
     sendSmtpEmail.to = [{ email: to }];
+    if (attachments.length > 0) {
+        sendSmtpEmail.attachment = attachments;
+    }
 
     try {
         const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
@@ -27,7 +31,7 @@ export const sendEmail = async (to, subject, htmlContent) => {
     }
 };
 
-const getEmailTemplate = (title, content, mainColor = "#dc2626") => {
+export const getEmailTemplate = (title, content, mainColor = "#dc2626") => {
     return `
     <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f7f6; padding: 40px 20px; text-align: center;">
         <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05); text-align: left;">

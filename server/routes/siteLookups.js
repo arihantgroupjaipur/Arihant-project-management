@@ -26,9 +26,9 @@ router.get('/', authenticate, async (req, res) => {
 // POST /api/site-lookups
 router.post('/', authenticate, adminOrPurchaseManagerOnly, async (req, res) => {
     try {
-        const { type, value, vendorAddress, vendorGst, vendorContactNo } = req.body;
+        const { type, value, vendorAddress, vendorGst, vendorContactNo, vendorEmail } = req.body;
         if (!type || !value) return res.status(400).json({ message: 'type and value are required' });
-        const item = await SiteLookup.create({ type, value, vendorAddress, vendorGst, vendorContactNo });
+        const item = await SiteLookup.create({ type, value, vendorAddress, vendorGst, vendorContactNo, vendorEmail });
         res.status(201).json(item);
     } catch (err) {
         if (err.code === 11000) return res.status(409).json({ message: 'This value already exists.' });
@@ -39,10 +39,10 @@ router.post('/', authenticate, adminOrPurchaseManagerOnly, async (req, res) => {
 // PUT /api/site-lookups/:id
 router.put('/:id', authenticate, adminOrPurchaseManagerOnly, async (req, res) => {
     try {
-        const { value, vendorAddress, vendorGst, vendorContactNo } = req.body;
+        const { value, vendorAddress, vendorGst, vendorContactNo, vendorEmail } = req.body;
         const updated = await SiteLookup.findByIdAndUpdate(
             req.params.id,
-            { value, vendorAddress, vendorGst, vendorContactNo },
+            { value, vendorAddress, vendorGst, vendorContactNo, vendorEmail },
             { new: true, runValidators: true }
         );
         if (!updated) return res.status(404).json({ message: 'Not found' });

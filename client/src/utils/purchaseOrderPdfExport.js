@@ -15,7 +15,7 @@ const fmtTs = (d) => {
     return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
 };
 
-export const generatePurchaseOrderPDF = async (purchaseOrders) => {
+export const generatePurchaseOrderPDF = async (purchaseOrders, { download = true } = {}) => {
     if (!purchaseOrders || purchaseOrders.length === 0) {
         throw new Error('No purchase orders to export');
     }
@@ -380,7 +380,11 @@ export const generatePurchaseOrderPDF = async (purchaseOrders) => {
         );
     }
 
-    // ── Download ──────────────────────────────────────────────────────────────
+    // ── Download (or return base64 for the caller to send elsewhere, e.g. email) ────
+    if (!download) {
+        return doc.output('datauristring').split(',')[1];
+    }
+
     const fileName = `Purchase_Order_${new Date().toISOString().split('T')[0]}.pdf`;
     const url  = URL.createObjectURL(doc.output('blob'));
     const link = Object.assign(document.createElement('a'), {

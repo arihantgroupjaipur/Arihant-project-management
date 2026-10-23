@@ -121,8 +121,9 @@ const WorkOrdersList = ({ workOrders, hasMore, isLoadingMore, onLoadMore, onCrea
                 const filtered = workOrders.filter(order => {
                     return !q ||
                         order.workOrderNumber?.toLowerCase().includes(q) ||
-                        order.addressLocation?.toLowerCase().includes(q) ||
-                        order.storeKeeperSupervisorName?.toLowerCase().includes(q) ||
+                        order.projectName?.toLowerCase().includes(q) ||
+                        order.siteLocation?.toLowerCase().includes(q) ||
+                        order.issuedTo?.toLowerCase().includes(q) ||
                         order.createdBy?.fullName?.toLowerCase().includes(q) ||
                         order.taskReference?.toLowerCase().includes(q);
                 });
@@ -147,7 +148,7 @@ const WorkOrdersList = ({ workOrders, hasMore, isLoadingMore, onLoadMore, onCrea
                                     <FileText className="w-5 h-5 text-purple-400" />
                                 </div>
                                 <div className="text-left">
-                                    <h4 className="font-medium text-foreground">WO #{order.workOrderNumber}</h4>
+                                    <h4 className="font-medium text-foreground">WO #{order.workOrderNumber}{order.projectName ? ` — ${order.projectName}` : ''}</h4>
                                     <p className="text-sm text-muted-foreground flex items-center gap-2">
                                         <Calendar className="w-3 h-3" />
                                         {order.createdAt ? format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm:ss') : format(new Date(order.date), 'dd/MM/yyyy')}
@@ -317,20 +318,40 @@ const WorkOrdersList = ({ workOrders, hasMore, isLoadingMore, onLoadMore, onCrea
                                     <div className="p-6 space-y-4">
                                         <div className="grid md:grid-cols-2 gap-4">
                                             <div>
-                                                <p className="text-sm text-muted-foreground mb-1">Address/Location</p>
-                                                <p className="font-medium">{order.addressLocation}</p>
+                                                <p className="text-sm text-muted-foreground mb-1">Project Name</p>
+                                                <p className="font-medium">{order.projectName || 'N/A'}</p>
                                             </div>
                                             <div>
-                                                <p className="text-sm text-muted-foreground mb-1">Main Reference</p>
-                                                <p className="font-medium">{order.mainWorkOrderReference || 'N/A'}</p>
+                                                <p className="text-sm text-muted-foreground mb-1">Site Location</p>
+                                                <p className="font-medium">{order.siteLocation || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-muted-foreground mb-1">Issued By</p>
+                                                <p className="font-medium">{order.issuedBy || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-muted-foreground mb-1">Issued To</p>
+                                                <p className="font-medium">{order.issuedTo || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-muted-foreground mb-1">Contract</p>
+                                                <p className="font-medium">{order.contractType || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-muted-foreground mb-1">Block</p>
+                                                <p className="font-medium">{order.block || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-muted-foreground mb-1">Start Date</p>
+                                                <p className="font-medium">{order.startDate ? format(new Date(order.startDate), 'dd/MM/yyyy') : 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-muted-foreground mb-1">Valid Till</p>
+                                                <p className="font-medium">{order.validTill ? format(new Date(order.validTill), 'dd/MM/yyyy') : 'N/A'}</p>
                                             </div>
                                             <div>
                                                 <p className="text-sm text-muted-foreground mb-1">Task No</p>
                                                 <p className="font-medium">{order.taskReference || 'N/A'}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-sm text-muted-foreground mb-1">Supervisor</p>
-                                                <p className="font-medium">{order.storeKeeperSupervisorName || 'N/A'}</p>
                                             </div>
                                             <div>
                                                 <p className="text-sm text-muted-foreground mb-1">Created By</p>
@@ -340,30 +361,26 @@ const WorkOrdersList = ({ workOrders, hasMore, isLoadingMore, onLoadMore, onCrea
 
                                         {order.workItems && order.workItems.length > 0 && (
                                             <div className="mt-6">
-                                                <h4 className="font-semibold mb-3">Work Items</h4>
+                                                <h4 className="font-semibold mb-3">1. Scope of Work</h4>
                                                 <div className="overflow-x-auto">
                                                     <table className="w-full text-sm">
                                                         <thead>
                                                             <tr className="border-b border-white/10">
                                                                 <th className="text-left p-2 text-muted-foreground font-medium">Description</th>
-                                                                <th className="text-left p-2 text-muted-foreground font-medium">Labour</th>
+                                                                <th className="text-left p-2 text-muted-foreground font-medium">Floor</th>
                                                                 <th className="text-left p-2 text-muted-foreground font-medium">Start Date</th>
-                                                                <th className="text-left p-2 text-muted-foreground font-medium">End Date</th>
-                                                                <th className="text-left p-2 text-muted-foreground font-medium">Area</th>
-                                                                <th className="text-left p-2 text-muted-foreground font-medium">Rate</th>
-                                                                <th className="text-left p-2 text-muted-foreground font-medium">Total</th>
+                                                                <th className="text-left p-2 text-muted-foreground font-medium">Original End Date</th>
+                                                                <th className="text-left p-2 text-muted-foreground font-medium">Revised Date</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
                                                             {order.workItems.map((item, idx) => (
                                                                 <tr key={idx} className="border-b border-white/5">
                                                                     <td className="p-2">{item.workDescription}</td>
-                                                                    <td className="p-2">{item.plannedLabour}</td>
-                                                                    <td className="p-2">{format(new Date(item.workStartDate), 'dd/MM/yyyy')}</td>
-                                                                    <td className="p-2">{format(new Date(item.workFinishDate), 'dd/MM/yyyy')}</td>
-                                                                    <td className="p-2">{item.workArea}</td>
-                                                                    <td className="p-2">₹{item.rate}</td>
-                                                                    <td className="p-2 font-semibold">₹{item.totalAmount}</td>
+                                                                    <td className="p-2">{item.floor || '—'}</td>
+                                                                    <td className="p-2">{item.workStartDate ? format(new Date(item.workStartDate), 'dd/MM/yyyy') : '—'}</td>
+                                                                    <td className="p-2">{item.workFinishDate ? format(new Date(item.workFinishDate), 'dd/MM/yyyy') : '—'}</td>
+                                                                    <td className="p-2">{item.revisedDate ? format(new Date(item.revisedDate), 'dd/MM/yyyy') : '—'}</td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
@@ -372,28 +389,60 @@ const WorkOrdersList = ({ workOrders, hasMore, isLoadingMore, onLoadMore, onCrea
                                             </div>
                                         )}
 
-                                        {(order.signatures?.contractor || order.signatures?.engineer || order.signatures?.supervisor) && (
+                                        {order.referenceDrawings && order.referenceDrawings.length > 0 && (
                                             <div className="mt-6">
-                                                <h4 className="font-semibold mb-3">Signatures</h4>
+                                                <h4 className="font-semibold mb-3">2. Reference Drawings / Specifications</h4>
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-sm">
+                                                        <thead>
+                                                            <tr className="border-b border-white/10">
+                                                                <th className="text-left p-2 text-muted-foreground font-medium">Revision / Date</th>
+                                                                <th className="text-left p-2 text-muted-foreground font-medium">Specification / Standard</th>
+                                                                <th className="text-left p-2 text-muted-foreground font-medium">Attached (Y/N)</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {order.referenceDrawings.map((r, idx) => (
+                                                                <tr key={idx} className="border-b border-white/5">
+                                                                    <td className="p-2">{r.revisionDate || '—'}</td>
+                                                                    <td className="p-2">{r.specification || '—'}</td>
+                                                                    <td className="p-2">{r.attached || '—'}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {order.resources && Object.values(order.resources).some(Boolean) && (
+                                            <div className="mt-6">
+                                                <h4 className="font-semibold mb-3">3. Resources to be Deployed</h4>
+                                                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                                                    <div><p className="text-muted-foreground mb-1">Labour (Mason)</p><p className="font-medium">{order.resources.labourMason || 'N/A'}</p></div>
+                                                    <div><p className="text-muted-foreground mb-1">Labour (beldar/cull)</p><p className="font-medium">{order.resources.labourBeldarCull || 'N/A'}</p></div>
+                                                    <div><p className="text-muted-foreground mb-1">Supervisor / Foreman</p><p className="font-medium">{order.resources.supervisorForeman || 'N/A'}</p></div>
+                                                    <div><p className="text-muted-foreground mb-1">Engineer InCharge</p><p className="font-medium">{order.resources.engineerInCharge || 'N/A'}</p></div>
+                                                    <div><p className="text-muted-foreground mb-1">Equipment / Machinery</p><p className="font-medium">{order.resources.equipmentMachinery || 'N/A'}</p></div>
+                                                    <div><p className="text-muted-foreground mb-1">Material Issued</p><p className="font-medium">{order.resources.materialIssued || 'N/A'}</p></div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {(order.signatures?.preparedVerifiedBy?.signature || order.signatures?.acceptedBy?.signature || order.signatures?.authorizedBy?.signature) && (
+                                            <div className="mt-6">
+                                                <h4 className="font-semibold mb-3">Prepared, Accepted & Authorized By</h4>
                                                 <div className="grid md:grid-cols-3 gap-4">
-                                                    {order.signatures.contractor && (
-                                                        <div>
-                                                            <p className="text-sm text-muted-foreground mb-2">Contractor</p>
-                                                            <img src={order.signatures.contractor} alt="Contractor Signature" className="border border-white/10 rounded-lg bg-white p-2" />
+                                                    {[
+                                                        { label: 'Prepared & Verified By', data: order.signatures.preparedVerifiedBy },
+                                                        { label: 'Accepted By', data: order.signatures.acceptedBy },
+                                                        { label: 'Authorized By', data: order.signatures.authorizedBy },
+                                                    ].map(({ label, data }) => data?.signature && (
+                                                        <div key={label}>
+                                                            <p className="text-sm text-muted-foreground mb-2">{label}{data.name ? ` — ${data.name}` : ''}</p>
+                                                            <img src={data.signature} alt={label} className="border border-white/10 rounded-lg bg-white p-2" />
                                                         </div>
-                                                    )}
-                                                    {order.signatures.engineer && (
-                                                        <div>
-                                                            <p className="text-sm text-muted-foreground mb-2">Engineer</p>
-                                                            <img src={order.signatures.engineer} alt="Engineer Signature" className="border border-white/10 rounded-lg bg-white p-2" />
-                                                        </div>
-                                                    )}
-                                                    {order.signatures.supervisor && (
-                                                        <div>
-                                                            <p className="text-sm text-muted-foreground mb-2">Supervisor</p>
-                                                            <img src={order.signatures.supervisor} alt="Supervisor Signature" className="border border-white/10 rounded-lg bg-white p-2" />
-                                                        </div>
-                                                    )}
+                                                    ))}
                                                 </div>
                                             </div>
                                         )}

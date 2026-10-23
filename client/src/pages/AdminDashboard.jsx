@@ -63,6 +63,7 @@ import api from "@/services/api";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import BillsList from "@/components/BillsList";
 import PaymentVouchersList from "@/components/PaymentVouchersList";
+import ProgressReportDashboard from "@/components/ProgressReportDashboard";
 
 const SHEET_MODULES = [
   { key: 'tasks', label: 'Tasks', settingKey: 'google_sheet_id', description: 'Task ID, Work Particulars, Contractor, Dates, Status, Project Manager' },
@@ -83,6 +84,15 @@ const ACTION_COLORS = {
   OTHER: 'text-muted-foreground bg-white/5 border-white/10',
 };
 
+// Compact Indian-numbering format for currency stat tiles — never overflows regardless of amount size
+const formatCompactINR = (amount) => {
+  const n = Number(amount) || 0;
+  const abs = Math.abs(n);
+  if (abs >= 1e7) return `₹${(n / 1e7).toLocaleString('en-IN', { maximumFractionDigits: 2 })} Cr`;
+  if (abs >= 1e5) return `₹${(n / 1e5).toLocaleString('en-IN', { maximumFractionDigits: 2 })} L`;
+  return `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+};
+
 const ROLE_LABEL = {
   'super-admin': 'Super Admin',
   admin: 'Admin',
@@ -90,6 +100,84 @@ const ROLE_LABEL = {
   project_manager: 'Project Manager',
   purchase_manager: 'Purchase Manager',
   account_manager: 'Account Manager',
+};
+
+const REFERENCE_SHEETS = [
+  { key: 'google_sheet_id_boq', label: 'BOQ / BOM Sheet', description: 'Read-only reference — Task/Material vs required quantity, checked when creating an Indent.' },
+  { key: 'google_sheet_id_ims', label: 'IMS (Inventory) Sheet', description: 'Read-only reference — current stock per material, checked during procurement.' },
+];
+
+const ReferenceSheetsPanel = () => {
+  const [values, setValues] = useState({});
+  const [inputs, setInputs] = useState({});
+  const [saving, setSaving] = useState({});
+
+  useEffect(() => {
+    REFERENCE_SHEETS.forEach((s) => {
+      settingsService.getSetting(s.key).then((res) => {
+        if (res?.value) {
+          setValues((prev) => ({ ...prev, [s.key]: res.value }));
+          setInputs((prev) => ({ ...prev, [s.key]: res.value }));
+        }
+      }).catch(() => { });
+    });
+  }, []);
+
+  const handleSave = async (key) => {
+    const val = (inputs[key] || '').trim();
+    if (!val) return toast.error('Paste a Spreadsheet ID first');
+    setSaving((prev) => ({ ...prev, [key]: true }));
+    try {
+      await settingsService.updateSetting(key, val, 'Read-only reference sheet ID for the procurement workflow');
+      setValues((prev) => ({ ...prev, [key]: val }));
+      toast.success('Sheet ID saved');
+    } catch (error) {
+      toast.error(error.message || 'Failed to save sheet ID');
+    } finally {
+      setSaving((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  return (
+    <div className="space-y-4 pt-4 border-t border-white/10">
+      <div>
+        <h3 className="text-lg font-bold text-foreground">Reference Sheets (Read-Only)</h3>
+        <p className="text-sm text-muted-foreground mt-1">
+          BOQ/BOM and inventory (IMS) are maintained in Google Sheets. Paste each sheet's Spreadsheet ID below — the app will read from it, never write to it.
+          Share the sheet with the same Service Account email used above (Viewer access is enough).
+        </p>
+      </div>
+      {REFERENCE_SHEETS.map((s) => (
+        <div key={s.key} className="bg-card border rounded-xl p-4 space-y-2">
+          <div>
+            <h4 className="font-semibold text-foreground text-sm">{s.label}</h4>
+            <p className="text-xs text-muted-foreground">{s.description}</p>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={inputs[s.key] || ''}
+              onChange={(e) => setInputs((prev) => ({ ...prev, [s.key]: e.target.value }))}
+              placeholder="Paste Spreadsheet ID here…"
+              className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+            <button
+              onClick={() => handleSave(s.key)}
+              disabled={saving[s.key]}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 shrink-0"
+            >
+              {saving[s.key] ? '...' : 'Save'}
+            </button>
+          </div>
+          {values[s.key] && (
+            <span className="inline-block text-xs font-medium text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-1 rounded-full">
+              Linked
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 };
 
 const LogsPanel = () => {
@@ -424,6 +512,7 @@ const AdminDashboard = () => {
   const [newVendorAddress, setNewVendorAddress] = useState("");
   const [newVendorGst, setNewVendorGst] = useState("");
   const [newVendorContactNo, setNewVendorContactNo] = useState("");
+  const [newVendorEmail, setNewVendorEmail] = useState("");
   const [editingLookup, setEditingLookup] = useState(null);
   const [lookupToDelete, setLookupToDelete] = useState(null);
 
@@ -640,6 +729,7 @@ const AdminDashboard = () => {
   const [hasMorePurchaseOrders, setHasMorePurchaseOrders] = useState(false);
   const [isPurchaseOrdersLoading, setIsPurchaseOrdersLoading] = useState(false);
   const [isPurchaseOrdersLoadingMore, setIsPurchaseOrdersLoadingMore] = useState(false);
+  const [totalPurchaseOrdersCount, setTotalPurchaseOrdersCount] = useState(0);
 
   // Fetch Purchase Orders with Pagination
   const fetchPurchaseOrders = async (pageNum, isLoadMore = false) => {
@@ -647,6 +737,7 @@ const AdminDashboard = () => {
       isLoadMore ? setIsPurchaseOrdersLoadingMore(true) : setIsPurchaseOrdersLoading(true);
       const data = await purchaseOrderService.getPurchaseOrders({ page: pageNum, limit: 100 });
       setHasMorePurchaseOrders(data.hasMore);
+      setTotalPurchaseOrdersCount(data.total || 0);
       const fetchedPOs = data.purchaseOrders || [];
       if (isLoadMore) {
         setPurchaseOrders(prev => [...prev, ...fetchedPOs]);
@@ -828,7 +919,7 @@ const AdminDashboard = () => {
 
   // Site Lookup Mutations
   const createLookupMutation = useMutation({
-    mutationFn: ({ type, value, vendorAddress, vendorGst, vendorContactNo }) => siteLookupService.createSiteLookup(type, value, vendorAddress, vendorGst, vendorContactNo),
+    mutationFn: ({ type, value, vendorAddress, vendorGst, vendorContactNo, vendorEmail }) => siteLookupService.createSiteLookup(type, value, vendorAddress, vendorGst, vendorContactNo, vendorEmail),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['siteLookups', variables.type] });
       toast.success("Item added successfully");
@@ -837,12 +928,13 @@ const AdminDashboard = () => {
       setNewVendorAddress("");
       setNewVendorGst("");
       setNewVendorContactNo("");
+      setNewVendorEmail("");
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to add item')
   });
 
   const updateLookupMutation = useMutation({
-    mutationFn: ({ id, value, vendorAddress, vendorGst, vendorContactNo }) => siteLookupService.updateSiteLookup(id, value, vendorAddress, vendorGst, vendorContactNo),
+    mutationFn: ({ id, value, vendorAddress, vendorGst, vendorContactNo, vendorEmail }) => siteLookupService.updateSiteLookup(id, value, vendorAddress, vendorGst, vendorContactNo, vendorEmail),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['siteLookups', variables.type] });
       toast.success("Item updated successfully");
@@ -852,6 +944,7 @@ const AdminDashboard = () => {
       setNewVendorAddress("");
       setNewVendorGst("");
       setNewVendorContactNo("");
+      setNewVendorEmail("");
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to update item')
   });
@@ -936,6 +1029,7 @@ const AdminDashboard = () => {
         vendorAddress: newVendorAddress,
         vendorGst: newVendorGst,
         vendorContactNo: newVendorContactNo,
+        vendorEmail: newVendorEmail,
         type: activeLookupTab
       });
     } else {
@@ -944,7 +1038,8 @@ const AdminDashboard = () => {
         value: newLookupValue,
         vendorAddress: newVendorAddress,
         vendorGst: newVendorGst,
-        vendorContactNo: newVendorContactNo
+        vendorContactNo: newVendorContactNo,
+        vendorEmail: newVendorEmail
       });
     }
   };
@@ -955,6 +1050,7 @@ const AdminDashboard = () => {
     setNewVendorAddress(lookup.vendorAddress || "");
     setNewVendorGst(lookup.vendorGst || "");
     setNewVendorContactNo(lookup.vendorContactNo || "");
+    setNewVendorEmail(lookup.vendorEmail || "");
     setIsLookupDialogOpen(true);
   };
 
@@ -1085,6 +1181,7 @@ const AdminDashboard = () => {
           <SidebarLink id="purchase-order" label="Purchase Order" icon={ShoppingCart} />
           <SidebarLink id="material-verification" label="Material Verification Certificate" icon={FileCheck} />
           <SidebarLink id="entries" label="Daily Progress Report" icon={Users} />
+          <SidebarLink id="progress-reports" label="Progress Reports" icon={BarChart3} />
           <SidebarLink id="workorder" label="Work Orders" icon={FileText} />
           <SidebarLink id="certification" label="Certifications" icon={ClipboardCheck} />
 
@@ -1154,6 +1251,7 @@ const AdminDashboard = () => {
                 <SidebarLink id="purchase-order" label="Purchase Order" icon={ShoppingCart} />
                 <SidebarLink id="material-verification" label="Material Verification Certificate" icon={FileCheck} />
                 <SidebarLink id="entries" label="Daily Progress Report" icon={Users} />
+                <SidebarLink id="progress-reports" label="Progress Reports" icon={BarChart3} />
                 <SidebarLink id="workorder" label="Work Orders" icon={FileText} />
                 <SidebarLink id="certification" label="Certifications" icon={ClipboardCheck} />
 
@@ -1201,6 +1299,7 @@ const AdminDashboard = () => {
             </button>
             <h2 className="text-lg font-semibold text-foreground truncate max-w-[200px] md:max-w-none">
               {activeTab === 'entries' && 'Daily Progress Report'}
+              {activeTab === 'progress-reports' && 'Progress Reports'}
               {activeTab === 'workorder' && 'Work Order Management'}
               {activeTab === 'certification' && 'Work Completion & QA/QC'}
 
@@ -1243,6 +1342,7 @@ const AdminDashboard = () => {
                 setNewVendorAddress('');
                 setNewVendorGst('');
                 setNewVendorContactNo('');
+                setNewVendorEmail('');
                 setEditingLookup(null);
                 setIsLookupDialogOpen(true);
               }} size="sm" className="gap-2 text-xs md:text-sm">
@@ -1370,6 +1470,16 @@ const AdminDashboard = () => {
                   />
                 </>
               )}
+            </motion.div>
+          )}
+
+          {activeTab === 'progress-reports' && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="max-w-full mx-auto"
+            >
+              <ProgressReportDashboard />
             </motion.div>
           )}
 
@@ -1793,6 +1903,7 @@ const AdminDashboard = () => {
                           <th className="p-4 whitespace-nowrap">Priority</th>
                           <th className="p-4 whitespace-nowrap">Items</th>
                           <th className="p-4 whitespace-nowrap">Verification</th>
+                          <th className="p-4 whitespace-nowrap">Procurement Stage</th>
                           <th className="p-4 whitespace-nowrap text-center">Action</th>
                         </tr>
                       </thead>
@@ -1848,6 +1959,16 @@ const AdminDashboard = () => {
                                     Pending
                                   </span>
                                 )}
+                              </td>
+                              <td className="p-4">
+                                <span className={`px-2 py-1 rounded-md text-xs font-medium border whitespace-nowrap ${
+                                  ['PO Raised', 'PO Sent', 'Delivered'].includes(indent.procurementStage) ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                  ['Received', 'Closed'].includes(indent.procurementStage) ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                                  indent.procurementStage && indent.procurementStage !== 'Not Started' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                                  'bg-white/5 text-muted-foreground border-white/10'
+                                }`}>
+                                  {indent.procurementStage || 'Not Started'}
+                                </span>
                               </td>
                               <td className="p-4">
                                 <div className="flex items-center justify-center gap-2">
@@ -2004,6 +2125,56 @@ const AdminDashboard = () => {
                       <p className="text-muted-foreground text-sm flex items-center gap-2 mt-1">Manage Purchase Orders and Vendor Details</p>
                     </div>
                   </div>
+
+                  {(() => {
+                    const poTotalAmount = purchaseOrders.reduce((sum, po) => sum + (Number(po.totalAmount) || 0), 0);
+                    const poPendingCount = purchaseOrders.filter(po => po.status === 'Pending').length;
+                    const poApprovedCount = purchaseOrders.filter(po => po.status === 'Approved').length;
+                    const poRejectedCount = purchaseOrders.filter(po => po.status === 'Rejected').length;
+                    return (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="glass-card p-4 flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                            <ShoppingCart className="w-4.5 h-4.5 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-lg font-bold text-foreground leading-tight truncate">{totalPurchaseOrdersCount}</p>
+                            <p className="text-xs text-muted-foreground">Total POs</p>
+                          </div>
+                        </div>
+                        <div className="glass-card p-4 flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-green-500/15 flex items-center justify-center shrink-0">
+                            <Wallet className="w-4.5 h-4.5 text-green-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-lg font-bold text-foreground leading-tight truncate" title={`₹${poTotalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}>
+                              {formatCompactINR(poTotalAmount)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">Total Amount</p>
+                          </div>
+                        </div>
+                        <div className="glass-card p-4 flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-yellow-500/15 flex items-center justify-center shrink-0">
+                            <ClipboardCheck className="w-4.5 h-4.5 text-yellow-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-lg font-bold text-foreground leading-tight truncate">{poPendingCount}</p>
+                            <p className="text-xs text-muted-foreground">Pending</p>
+                          </div>
+                        </div>
+                        <div className="glass-card p-4 flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
+                            <CheckCircle className="w-4.5 h-4.5 text-blue-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-lg font-bold text-foreground leading-tight truncate">{poApprovedCount}</p>
+                            <p className="text-xs text-muted-foreground truncate">Approved{poRejectedCount > 0 ? ` · ${poRejectedCount} rejected` : ''}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/5 p-4 rounded-xl border border-white/10">
                     <div className="relative w-full sm:max-w-xs">
                       <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
@@ -2182,6 +2353,53 @@ const AdminDashboard = () => {
                       </select>
                     </div>
                   </div>
+
+                  {(() => {
+                    const taskPendingCount = tasks.filter(t => t.status === 'Pending').length;
+                    const taskInProgressCount = tasks.filter(t => t.status === 'In Progress').length;
+                    const taskCompletedCount = tasks.filter(t => t.status === 'Completed').length;
+                    return (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 border-b border-white/10">
+                        <div className="glass-card p-4 flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                            <ClipboardCheck className="w-4.5 h-4.5 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-lg font-bold text-foreground leading-tight truncate">{tasks.length}</p>
+                            <p className="text-xs text-muted-foreground">Total Tasks</p>
+                          </div>
+                        </div>
+                        <div className="glass-card p-4 flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-yellow-500/15 flex items-center justify-center shrink-0">
+                            <ClipboardCheck className="w-4.5 h-4.5 text-yellow-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-lg font-bold text-foreground leading-tight truncate">{taskPendingCount}</p>
+                            <p className="text-xs text-muted-foreground">Pending</p>
+                          </div>
+                        </div>
+                        <div className="glass-card p-4 flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
+                            <ClipboardCheck className="w-4.5 h-4.5 text-blue-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-lg font-bold text-foreground leading-tight truncate">{taskInProgressCount}</p>
+                            <p className="text-xs text-muted-foreground">In Progress</p>
+                          </div>
+                        </div>
+                        <div className="glass-card p-4 flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-green-500/15 flex items-center justify-center shrink-0">
+                            <CheckCircle className="w-4.5 h-4.5 text-green-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-lg font-bold text-foreground leading-tight truncate">{taskCompletedCount}</p>
+                            <p className="text-xs text-muted-foreground">Completed</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-white/5 text-muted-foreground font-medium uppercase text-xs">
@@ -2604,6 +2822,8 @@ const AdminDashboard = () => {
                   </div>
                 );
               })}
+
+              <ReferenceSheetsPanel />
             </motion.div>
           )}
 
@@ -2689,6 +2909,15 @@ const AdminDashboard = () => {
                     value={newVendorContactNo}
                     onChange={(e) => setNewVendorContactNo(e.target.value)}
                     placeholder="Contact Number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Vendor Email</label>
+                  <Input
+                    type="email"
+                    value={newVendorEmail}
+                    onChange={(e) => setNewVendorEmail(e.target.value)}
+                    placeholder="vendor@example.com"
                   />
                 </div>
               </>

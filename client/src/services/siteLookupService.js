@@ -11,13 +11,13 @@ export const getSiteLookups = async (type = null) => {
     return res.data;
 };
 
-export const createSiteLookup = async (type, value, vendorAddress, vendorGst, vendorContactNo) => {
-    const res = await axios.post(`${API_URL}/site-lookups`, { type, value, vendorAddress, vendorGst, vendorContactNo }, { headers: headers() });
+export const createSiteLookup = async (type, value, vendorAddress, vendorGst, vendorContactNo, vendorEmail) => {
+    const res = await axios.post(`${API_URL}/site-lookups`, { type, value, vendorAddress, vendorGst, vendorContactNo, vendorEmail }, { headers: headers() });
     return res.data;
 };
 
-export const updateSiteLookup = async (id, value, vendorAddress, vendorGst, vendorContactNo) => {
-    const res = await axios.put(`${API_URL}/site-lookups/${id}`, { value, vendorAddress, vendorGst, vendorContactNo }, { headers: headers() });
+export const updateSiteLookup = async (id, value, vendorAddress, vendorGst, vendorContactNo, vendorEmail) => {
+    const res = await axios.put(`${API_URL}/site-lookups/${id}`, { value, vendorAddress, vendorGst, vendorContactNo, vendorEmail }, { headers: headers() });
     return res.data;
 };
 

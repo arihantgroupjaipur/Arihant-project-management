@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Save, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Save, ChevronDown, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { getIndentsAll } from "@/services/indentService";
 import { createPurchaseOrder, updatePurchaseOrder } from "@/services/purchaseOrderService";
+import { optimizeQuotations } from "@/services/aiService";
+import QuotationOptimizerModal from "./QuotationOptimizerModal";
+import NegotiationLogPanel from "./NegotiationLogPanel";
 import siteLookupService from "@/services/siteLookupService";
 import {
     Select,
@@ -25,6 +28,15 @@ import { uploadService } from "@/services/uploadService";
 import { FileUp, Link as LinkIcon } from "lucide-react";
 import FileUploadSelector from "./FileUploadSelector";
 
+// Formats a Date/date-string into the "yyyy-MM-ddTHH:mm" shape a <input type="datetime-local"> needs, in local time
+const toDateTimeLocal = (value) => {
+    if (!value) return "";
+    const d = new Date(value);
+    if (isNaN(d)) return "";
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [indents, setIndents] = useState([]);
@@ -39,6 +51,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
     const [formData, setFormData] = useState({
         poNumber: "",
         date: new Date().toISOString().split('T')[0],
+        expectedDeliveryDate: "",
         indentReferences: [],
         taskReference: "",
 
@@ -47,6 +60,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
         vendorAddress: "",
         vendorGst: "",
         vendorContactNo: "",
+        vendorEmail: "",
 
         // Ship To Info
         shipToCompanyName: "ARIHANT DREAM INFRA PROJECTS LTD",
@@ -85,6 +99,8 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
         quotation3: null,
     });
 
+    const [isOptimizerModalOpen, setIsOptimizerModalOpen] = useState(false);
+
     useEffect(() => {
         // Fetch indents to populate dropdown
         getIndentsAll().then(setIndents).catch(err => {
@@ -103,6 +119,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
             setFormData({
                 poNumber: initialData.poNumber || "",
                 date: initialData.date ? new Date(initialData.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                expectedDeliveryDate: toDateTimeLocal(initialData.expectedDeliveryDate),
                 indentReferences: initialIndentRefs,
                 taskReference: initialData.taskReference || "",
 
@@ -110,6 +127,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                 vendorAddress: initialData.vendorAddress || "",
                 vendorGst: initialData.vendorGst || "",
                 vendorContactNo: initialData.vendorContactNo || "",
+                vendorEmail: initialData.vendorEmail || "",
 
                 shipToCompanyName: initialData.shipToCompanyName || "ARIHANT DREAM INFRA PROJECTS LTD",
                 shipToAddress: initialData.shipToAddress || "",
@@ -256,12 +274,10 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
     };
 
     const handleFileChange = (file, quotationKey) => {
-        if (file) {
-            setQuotationFiles(prev => ({
-                ...prev,
-                [quotationKey]: file
-            }));
-        }
+        setQuotationFiles(prev => ({
+            ...prev,
+            [quotationKey]: file || null
+        }));
     };
 
     const addItem = () => {
@@ -290,6 +306,81 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
         return Math.round((roundedTotal - subTotal) * 100) / 100;
     };
 
+    // Uploads any newly-selected quotation files (replacing old ones on S3 if present),
+    // syncs the resulting keys into formData, and returns the up-to-date url map.
+    const uploadPendingQuotations = async () => {
+        let urls = {
+            quotation1Url: formData.quotation1Url,
+            quotation2Url: formData.quotation2Url,
+            quotation3Url: formData.quotation3Url
+        };
+
+        for (const [key, file] of Object.entries(quotationFiles)) {
+            if (file) {
+                // If we are replacing an existing quotation, delete the old file from S3
+                if (formData[`${key}Url`]) {
+                    toast.info(`Removing old ${key}...`);
+                    try {
+                        await uploadService.deleteImage(formData[`${key}Url`]);
+                    } catch (err) {
+                        console.error(`Failed to delete old ${key}:`, err);
+                        // Proceed anyway, we don't want a soft-delete failure to break the PO update
+                    }
+                }
+
+                toast.info(`Uploading new ${key}...`);
+                const uploadResult = await uploadService.uploadImage(file);
+                // Match quotation1 => quotation1Url
+                urls[`${key}Url`] = uploadResult.key;
+            }
+        }
+
+        if (urls.quotation1Url !== formData.quotation1Url || urls.quotation2Url !== formData.quotation2Url || urls.quotation3Url !== formData.quotation3Url) {
+            setFormData(prev => ({ ...prev, ...urls }));
+            setQuotationFiles({ quotation1: null, quotation2: null, quotation3: null });
+        }
+
+        return urls;
+    };
+
+    // Called by the modal's "Analyze with AI" button — uploads any pending files (the 3 official
+    // quotation slots plus any extra ad-hoc ones added in the modal for a wider comparison), then runs the AI optimizer
+    const handleAnalyzeQuotations = async (extraFiles = []) => {
+        const officialUrls = await uploadPendingQuotations();
+        const extraKeys = [];
+        for (const file of extraFiles) {
+            if (!file) continue;
+            toast.info(`Uploading ${file.name}...`);
+            const uploadResult = await uploadService.uploadImage(file);
+            extraKeys.push(uploadResult.key);
+        }
+        const allUrls = [officialUrls.quotation1Url, officialUrls.quotation2Url, officialUrls.quotation3Url, ...extraKeys].filter(Boolean);
+        return optimizeQuotations(allUrls);
+    };
+
+    // Replaces the PO's item list with the AI-picked cheapest-per-item combination
+    const handleApplyOptimizedItems = (optimalItems) => {
+        const newItems = optimalItems.map((item) => {
+            const quantity = Number(item.quantity) || 0;
+            const rate = Number(item.rate) || 0;
+            const baseAmount = quantity * rate;
+            const taxRate = "18";
+            const taxAmount = Math.round(baseAmount * 0.18 * 100) / 100;
+            return {
+                materialDescription: item.materialDescription || "",
+                unit: item.unit || "",
+                quantity,
+                rate,
+                baseAmount,
+                taxRate,
+                taxAmount,
+                amount: Math.round((baseAmount + taxAmount) * 100) / 100,
+            };
+        });
+        setItems(newItems.length > 0 ? newItems : items);
+        toast.success(`Applied ${newItems.length} optimized item${newItems.length === 1 ? '' : 's'} to the Purchase Order`);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -308,31 +399,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
 
         try {
             // Upload quotations if new files were selected
-            let urls = {
-                quotation1Url: formData.quotation1Url,
-                quotation2Url: formData.quotation2Url,
-                quotation3Url: formData.quotation3Url
-            };
-
-            for (const [key, file] of Object.entries(quotationFiles)) {
-                if (file) {
-                    // If we are replacing an existing quotation, delete the old file from S3
-                    if (formData[`${key}Url`]) {
-                        toast.info(`Removing old ${key}...`);
-                        try {
-                            await uploadService.deleteImage(formData[`${key}Url`]);
-                        } catch (err) {
-                            console.error(`Failed to delete old ${key}:`, err);
-                            // Proceed anyway, we don't want a soft-delete failure to break the PO update
-                        }
-                    }
-
-                    toast.info(`Uploading new ${key}...`);
-                    const uploadResult = await uploadService.uploadImage(file);
-                    // Match quotation1 => quotation1Url
-                    urls[`${key}Url`] = uploadResult.key;
-                }
-            }
+            const urls = await uploadPendingQuotations();
 
             const submissionData = {
                 ...formData,
@@ -360,6 +427,7 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
     };
 
     return (
+        <>
         <form onSubmit={handleSubmit} className="space-y-8">
             {/* Header Details */}
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -469,7 +537,8 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                                                         vendorName: vendor.value,
                                                         vendorAddress: vendor.vendorAddress || prev.vendorAddress,
                                                         vendorGst: vendor.vendorGst || prev.vendorGst,
-                                                        vendorContactNo: vendor.vendorContactNo || prev.vendorContactNo
+                                                        vendorContactNo: vendor.vendorContactNo || prev.vendorContactNo,
+                                                        vendorEmail: vendor.vendorEmail || prev.vendorEmail
                                                     }));
                                                 }}
                                                 className="cursor-pointer"
@@ -514,6 +583,26 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                                 placeholder="Phone number"
                             />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-muted-foreground">Vendor Email</label>
+                            <input
+                                type="email"
+                                value={formData.vendorEmail}
+                                onChange={(e) => handleInputChange("vendorEmail", e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                                placeholder="vendor@example.com"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-muted-foreground">Expected Delivery Date & Time</label>
+                            <input
+                                type="datetime-local"
+                                value={formData.expectedDeliveryDate}
+                                onChange={(e) => handleInputChange("expectedDeliveryDate", e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                            />
+                            <p className="text-xs text-muted-foreground">Used to auto-detect vendor delays and send an AI reminder email.</p>
                         </div>
                     </div>
                 </div>
@@ -895,7 +984,18 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
 
             {/* Quotations Section */}
             <div className="pt-6 border-t border-white/10 mt-6 space-y-4">
-                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Quotations & Approvals</h3>
+                <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Quotations & Approvals</h3>
+                    <button
+                        type="button"
+                        onClick={() => setIsOptimizerModalOpen(true)}
+                        className="flex items-center gap-2 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full transition-all"
+                    >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Compare with AI & Pick Cheapest
+                    </button>
+                </div>
+
                 <div className="grid md:grid-cols-3 gap-6">
                     {[1, 2, 3].map((num) => (
                         <div key={`quotation${num}`} className="space-y-4 p-4 rounded-xl border border-white/5 bg-white/[0.02]">
@@ -953,6 +1053,8 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                 )}
             </div>
 
+            <NegotiationLogPanel purchaseOrderId={initialData?._id} vendorName={formData.vendorName} />
+
             {/* Actions */}
             <div className="flex gap-4 pt-6 border-t border-white/10 justify-end">
                 <button
@@ -976,6 +1078,19 @@ const PurchaseOrderForm = ({ onSuccess, onCancel, initialData = null }) => {
                 </button>
             </div>
         </form>
+
+        <QuotationOptimizerModal
+            isOpen={isOptimizerModalOpen}
+            onClose={() => setIsOptimizerModalOpen(false)}
+            quotationFiles={quotationFiles}
+            existingUrls={{ quotation1Url: formData.quotation1Url, quotation2Url: formData.quotation2Url, quotation3Url: formData.quotation3Url }}
+            onFileSelect={handleFileChange}
+            onAnalyze={handleAnalyzeQuotations}
+            onApplyToItems={handleApplyOptimizedItems}
+            poNumber={formData.poNumber}
+            vendorName={formData.vendorName}
+        />
+        </>
     );
 };
 

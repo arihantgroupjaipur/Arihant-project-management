@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import ActiveSession from '../models/ActiveSession.js';
+import { JWT_SECRET } from '../config/jwt.js';
 
 const authMiddleware = async (req, res, next) => {
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -9,7 +10,7 @@ const authMiddleware = async (req, res, next) => {
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key_123');
+        const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded;
 
         // Skip session check for the logout route itself

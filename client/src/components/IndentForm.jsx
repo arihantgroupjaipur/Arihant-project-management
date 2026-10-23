@@ -6,6 +6,9 @@ import { toast } from "sonner";
 import { createIndent, updateIndent } from "@/services/indentService";
 import { getTasksAll } from "@/services/taskService";
 import { getSiteLookups } from "@/services/siteLookupService";
+import { getBoqRows, getImsRows } from "@/services/procurementService";
+import SheetReferencePanel from "@/components/SheetReferencePanel";
+import BoqStockCheckPanel from "@/components/BoqStockCheckPanel";
 import {
     Select,
     SelectContent,
@@ -332,6 +335,10 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                             </div>
                         )}
                     </div>
+
+                    <div className="mt-3">
+                        <BoqStockCheckPanel workParticulars={tasks.find(t => t.taskId === formData.taskReference)?.workParticulars} />
+                    </div>
                 </div>
 
                 <div>
@@ -609,6 +616,22 @@ const IndentForm = ({ onSuccess, initialData = null }) => {
                             <Plus className="w-4 h-4" /> Add Row
                         </button>
                     </div>
+                </div>
+
+                {/* BOQ/BOM & Stock (IMS) Reference — read-only lookup against the linked Google Sheets */}
+                <div className="p-4 border-b border-white/10 bg-black/20 space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reference Check (Optional)</p>
+                    <SheetReferencePanel
+                        title="BOQ/BOM"
+                        placeholder="Search BOQ/BOM by task or material…"
+                        fetchRows={getBoqRows}
+                        initialQuery={formData.taskReference}
+                    />
+                    <SheetReferencePanel
+                        title="IMS Stock"
+                        placeholder="Search current stock by material name…"
+                        fetchRows={getImsRows}
+                    />
                 </div>
 
                 {/* Footer Notes */}

@@ -96,6 +96,18 @@ const indentSchema = new mongoose.Schema({
         ref: 'User',
         required: true,
     },
+
+    // Procurement funnel tracking — additive, does not affect the existing `status` field/workflow
+    procurementStage: {
+        type: String,
+        enum: ['Not Started', 'BOQ Check', 'Quotation', 'Negotiation', 'Vendor Selected', 'PO Raised', 'PO Sent', 'Delivered', 'Received', 'Closed'],
+        default: 'Not Started',
+    },
+    purchaseOrderReference: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'PurchaseOrder',
+        default: null,
+    },
 }, { timestamps: true });
 
 const Indent = mongoose.model('Indent', indentSchema);

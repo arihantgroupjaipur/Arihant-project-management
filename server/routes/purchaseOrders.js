@@ -3,6 +3,8 @@ import PurchaseOrder from '../models/PurchaseOrder.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import { syncAllPurchaseOrdersToSheet } from '../utils/googleSheetsService.js';
 import { logActivity } from '../utils/activityLogger.js';
+import Indent from '../models/Indent.js';
+import { sendEmail, getEmailTemplate } from '../utils/emailService.js';
 
 const router = express.Router();
 const authenticate = authMiddleware;
@@ -30,6 +32,15 @@ router.post('/', authenticate, poCreateMiddleware, async (req, res) => {
         const populatedPO = await PurchaseOrder.findById(savedPO._id).populate('indentReferences');
         syncAllPurchaseOrdersToSheet().catch(err => console.error('Sheet Sync Error:', err));
         logActivity('CREATE', 'Purchase Order', `PO created: ${populatedPO.poNumber}`, req.user?.email, populatedPO.poNumber);
+
+        // Write back onto the referenced Indent(s) — additive fields only, existing Indent status/workflow untouched
+        if (savedPO.indentReferences?.length > 0) {
+            Indent.updateMany(
+                { _id: { $in: savedPO.indentReferences } },
+                { $set: { purchaseOrderReference: savedPO._id, procurementStage: 'PO Raised' } }
+            ).catch(err => console.error('Indent procurement stage update error:', err));
+        }
+
         res.status(201).json(populatedPO);
     } catch (error) {
         console.error("Error creating PO:", error);
@@ -313,6 +324,25 @@ router.put('/:id', authenticate, async (req, res) => {
         if (!updatedPO) return res.status(404).json({ message: 'Purchase Order not found' });
         syncAllPurchaseOrdersToSheet().catch(err => console.error('Sheet Sync Error:', err));
         logActivity('UPDATE', 'Purchase Order', `PO updated: ${updatedPO.poNumber}`, req.user?.email, updatedPO.poNumber);
+
+        // Mirror material-verification / vendor-selection progress onto the linked Indent(s)' procurement funnel stage
+        if (updatedPO.indentReferences?.length > 0) {
+            let stage = null;
+            if (req.body.materialVerificationStatus || req.body.receipts) {
+                stage = updatedPO.materialVerificationStatus === 'Verified' ? 'Received'
+                    : updatedPO.materialVerificationStatus === 'Partial' ? 'Delivered'
+                        : null;
+            } else if (req.body.approvedQuotation && updatedPO.approvedQuotation !== 'none') {
+                stage = 'Vendor Selected';
+            }
+            if (stage) {
+                Indent.updateMany(
+                    { _id: { $in: updatedPO.indentReferences } },
+                    { $set: { procurementStage: stage } }
+                ).catch(err => console.error('Indent procurement stage update error:', err));
+            }
+        }
+
         res.status(200).json(updatedPO);
     } catch (error) {
         if (error.code === 11000) {
@@ -348,6 +378,37 @@ router.patch('/:id/pdf', authenticate, poCreateMiddleware, async (req, res) => {
         res.status(200).json(updatedPO);
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+});
+
+// POST /:id/send-to-vendor — { pdfBase64 } — emails the PO PDF (generated client-side) to vendorEmail
+router.post('/:id/send-to-vendor', authenticate, poCreateMiddleware, async (req, res) => {
+    try {
+        const { pdfBase64 } = req.body;
+        const po = await PurchaseOrder.findById(req.params.id);
+        if (!po) return res.status(404).json({ message: 'Purchase Order not found' });
+        if (!po.vendorEmail) return res.status(400).json({ message: 'This PO has no vendor email set' });
+
+        const bodyHtml = `<p>Dear ${po.vendorName},</p><p>Please find attached Purchase Order <strong>${po.poNumber}</strong> for your reference and action.</p><p>Total Amount: ₹${Number(po.totalAmount).toLocaleString('en-IN')}</p>`;
+        const html = getEmailTemplate(`Purchase Order ${po.poNumber}`, bodyHtml);
+        const attachments = pdfBase64 ? [{ name: `${po.poNumber}.pdf`, content: pdfBase64 }] : [];
+
+        await sendEmail(po.vendorEmail, `Purchase Order ${po.poNumber}`, html, attachments);
+
+        po.sentToVendorAt = new Date();
+        await po.save();
+
+        if (po.indentReferences?.length > 0) {
+            await Indent.updateMany(
+                { _id: { $in: po.indentReferences } },
+                { $set: { procurementStage: 'PO Sent' } }
+            );
+        }
+
+        res.json({ sent: true, sentToVendorAt: po.sentToVendorAt });
+    } catch (error) {
+        console.error('Send to vendor error:', error);
+        res.status(500).json({ message: 'Failed to send PO to vendor', error: error.message });
     }
 });
 

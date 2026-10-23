@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Pencil, Trash2, ChevronDown, Sheet, File, FileText, ShoppingCart, FileCheck, Upload, Eye, X, Loader2 } from "lucide-react";
+import { Pencil, Trash2, ChevronDown, Sheet, File, FileText, ShoppingCart, FileCheck, Upload, Eye, X, Loader2, MailWarning, Send } from "lucide-react";
+import DelayReminderLogModal from "./DelayReminderLogModal";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { generatePurchaseOrderPDF } from '@/utils/purchaseOrderPdfExport';
 import { generatePurchaseOrderExcel } from '@/utils/purchaseOrderExcelExport';
 import { generatePurchaseOrderCSV } from '@/utils/purchaseOrderCsvExport';
 import { uploadService } from '@/services/uploadService';
-import { uploadPurchaseOrderPdf, removePurchaseOrderPdf } from '@/services/purchaseOrderService';
+import { uploadPurchaseOrderPdf, removePurchaseOrderPdf, sendPurchaseOrderToVendor } from '@/services/purchaseOrderService';
 import { useQueryClient } from '@tanstack/react-query';
 
 const PurchaseOrdersList = ({
@@ -28,7 +29,27 @@ const PurchaseOrdersList = ({
     const [expandedId, setExpandedId] = useState(null);
     const [deleteModalData, setDeleteModalData] = useState(null);
     const [uploadingId, setUploadingId] = useState(null);
+    const [delayLogPO, setDelayLogPO] = useState(null);
+    const [sendingToVendorId, setSendingToVendorId] = useState(null);
     const queryClient = useQueryClient();
+
+    const handleSendToVendor = async (po) => {
+        if (!po.vendorEmail) {
+            toast.error("This PO has no vendor email set — add one in Edit first.");
+            return;
+        }
+        setSendingToVendorId(po._id);
+        try {
+            const pdfBase64 = await generatePurchaseOrderPDF([po], { download: false });
+            await sendPurchaseOrderToVendor(po._id, pdfBase64);
+            toast.success(`PO sent to ${po.vendorEmail}`);
+            queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+        } catch (err) {
+            toast.error(err.message || 'Failed to send PO to vendor');
+        } finally {
+            setSendingToVendorId(null);
+        }
+    };
 
     const handlePdfUpload = async (po, file) => {
         if (!file) return;
@@ -132,6 +153,16 @@ const PurchaseOrdersList = ({
                                                 {po.status}
                                             </span>
                                         )}
+                                        {po.delayReminderSentAt && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); setDelayLogPO(po); }}
+                                                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border bg-orange-500/10 text-orange-400 border-orange-500/20 hover:bg-orange-500/20 transition-colors"
+                                                title="Vendor delay reminder email was sent — click to view"
+                                            >
+                                                <MailWarning className="w-3 h-3" /> Delay Email Sent
+                                            </button>
+                                        )}
                                     </div>
                                     <p className="text-sm text-muted-foreground flex gap-3 flex-wrap">
                                         <span>Vendor: <strong className="font-medium text-foreground/80">{po.vendorName}</strong></span>
@@ -186,6 +217,18 @@ const PurchaseOrdersList = ({
                                         >
                                             <File className="w-3.5 h-3.5" />
                                             <span className="text-xs font-medium">CSV</span>
+                                        </motion.button>
+                                        <motion.button
+                                            initial={{ opacity: 0, scale: 0.8 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            transition={{ delay: 0.15 }}
+                                            onClick={() => handleSendToVendor(po)}
+                                            disabled={sendingToVendorId === po._id}
+                                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 transition-colors disabled:opacity-50"
+                                            title={po.sentToVendorAt ? `Re-send to vendor (last sent ${new Date(po.sentToVendorAt).toLocaleDateString('en-IN')})` : "Email PO to vendor"}
+                                        >
+                                            {sendingToVendorId === po._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                                            <span className="text-xs font-medium">{po.sentToVendorAt ? 'Re-send' : 'Send to Vendor'}</span>
                                         </motion.button>
 
                                         {/* Upload PDF */}
@@ -542,6 +585,12 @@ const PurchaseOrdersList = ({
                     </div>
                 )}
             </AnimatePresence>
+
+            <DelayReminderLogModal
+                isOpen={!!delayLogPO}
+                onClose={() => setDelayLogPO(null)}
+                po={delayLogPO}
+            />
         </div>
     );
 };

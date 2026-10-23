@@ -30,6 +30,19 @@ const purchaseOrderSchema = new mongoose.Schema({
     vendorAddress: { type: String, trim: true },
     vendorGst: { type: String, trim: true },
     vendorContactNo: { type: String, trim: true },
+    vendorEmail: { type: String, trim: true },
+
+    // Expected delivery deadline — used to detect vendor delays
+    expectedDeliveryDate: { type: Date },
+    // Set once an AI delay-reminder email has been sent, so we don't spam the vendor
+    delayReminderSentAt: { type: Date, default: null },
+    // Full history of every AI delay-reminder email sent for this PO
+    delayReminderLog: [{
+        sentAt: { type: Date, default: Date.now },
+        daysLate: { type: Number },
+        subject: { type: String, trim: true },
+        body: { type: String, trim: true },
+    }],
 
     // Ship To Details
     shipToCompanyName: {
@@ -115,7 +128,10 @@ const purchaseOrderSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: false
-    }
+    },
+
+    // Set when the "Send to Vendor" action emails this PO's PDF to vendorEmail
+    sentToVendorAt: { type: Date, default: null },
 }, { timestamps: true });
 
 export default mongoose.model('PurchaseOrder', purchaseOrderSchema);

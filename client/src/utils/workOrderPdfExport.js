@@ -1,277 +1,253 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const fmtTs = (d) => {
-    if (!d) return '—';
+const fmtDate = (d) => {
+    if (!d) return '';
     const dt = new Date(d);
-    if (isNaN(dt)) return '—';
+    if (isNaN(dt)) return '';
     const ist = new Date(dt.getTime() + 5.5 * 60 * 60 * 1000);
-    const dd = String(ist.getUTCDate()).padStart(2,'0');
-    const mm = String(ist.getUTCMonth()+1).padStart(2,'0');
+    const dd = String(ist.getUTCDate()).padStart(2, '0');
+    const mm = String(ist.getUTCMonth() + 1).padStart(2, '0');
     const yyyy = ist.getUTCFullYear();
-    const hh = String(ist.getUTCHours()).padStart(2,'0');
-    const min = String(ist.getUTCMinutes()).padStart(2,'0');
-    const ss = String(ist.getUTCSeconds()).padStart(2,'0');
-    return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+    return `${dd}/${mm}/${yyyy}`;
 };
 
 export const generateWorkOrderPDF = async (workOrder) => {
     if (!workOrder) throw new Error('No work order to export');
 
     const doc = new jsPDF();
-    const PW  = doc.internal.pageSize.getWidth();   // 210 mm
-    const PH  = doc.internal.pageSize.getHeight();  // 297 mm
+    const PW = doc.internal.pageSize.getWidth();   // 210 mm
+    const PH = doc.internal.pageSize.getHeight();  // 297 mm
 
-    // ── Layout constants ──────────────────────────────────────────────────────
-    const ML          = 15;
-    const MR          = 15;
-    const USABLE_W    = PW - ML - MR;
-    const SAFE_BOTTOM = PH - 22;
-    const FOOTER_Y    = PH - 10;
-    const CONT_TOP    = 22;
-    const LINE_SM     = 4.5;   // small line height for field text
+    const ML = 15;
+    const MR = 15;
+    const USABLE_W = PW - ML - MR;
+    const FOOTER_Y = PH - 10;
 
     const isRqube =
-        workOrder.shipToCompanyName  === 'RQUBE BUILDCON PRIVATE LIMITED' ||
-        workOrder.contactPersonName  === 'RQUBE BUILDCON PRIVATE LIMITED' ||
-        workOrder.addressLocation    === 'RQUBE';
+        workOrder.shipToCompanyName === 'RQUBE BUILDCON PRIVATE LIMITED' ||
+        workOrder.issuedTo === 'RQUBE BUILDCON PRIVATE LIMITED';
 
-    // ── Load logo ─────────────────────────────────────────────────────────────
+    // ── Load logo ────────────────────────────────────────────────────────────
     let logoData = null;
     try {
-        const res  = await fetch('/arihantlogo.png');
+        const res = await fetch('/arihantlogo.png');
         const blob = await res.blob();
-        logoData   = await new Promise(resolve => {
+        logoData = await new Promise((resolve) => {
             const r = new FileReader();
             r.onloadend = () => resolve(r.result);
             r.readAsDataURL(blob);
         });
     } catch { /* logo optional */ }
 
-    // ── First-page header ─────────────────────────────────────────────────────
+    // ── Letterhead ───────────────────────────────────────────────────────────
     if (logoData && !isRqube) {
-        try { doc.addImage(logoData, 'PNG', ML, 8, 20, 20); } catch { /* skip */ }
+        try { doc.addImage(logoData, 'PNG', ML, 8, 16, 16); } catch { /* skip */ }
     }
 
-    const companyName = isRqube
-        ? 'RQUBE BUILDCON PRIVATE LIMITED'
-        : 'Arihant Dream Infra Projects Ltd. Jaipur';
+    const companyName = isRqube ? 'RQUBE BUILDCON PRIVATE LIMITED' : 'Arihant Dream Infra Projects Ltd. Jaipur';
+
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+    doc.text(companyName, PW / 2, 14, { align: 'center' });
+
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(60);
+    doc.text('2nd Floor, Class Of Pearl, Income Tax Colony, Tonk Road, Durgapura, Jaipur, Rajasthan, 302018', PW / 2, 19, { align: 'center' });
+
+    doc.setFontSize(7.5);
+    doc.text('Pan No. : AAJCA5226A', ML, 25);
+    doc.text('CIN No. U7010RJ2011PLC035322', PW - MR, 25, { align: 'right' });
+    doc.text('Website: www.arihantgroupjaipur.com', ML, 29);
+    doc.text('Email: info@arihantgroupjaipur.com', PW - MR, 29, { align: 'right' });
+
+    doc.setDrawColor(0); doc.setLineWidth(0.3);
+    doc.line(ML, 32, PW - MR, 32);
 
     doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
-    doc.text(companyName, PW / 2, 16, { align: 'center' });
+    doc.text('WORK ORDER', PW / 2, 39, { align: 'center' });
 
-    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(60);
-    doc.text(
-        '2nd Floor, Class Of Pearl, Income Tax Colony, Tonk Road, Durgapura, Jaipur, Rajasthan, 302018  (Pan - AAJCA5226A)',
-        PW / 2, 21, { align: 'center' }
-    );
-    doc.text('CIN No. U7010RJ2011PLC035322', PW / 2, 25, { align: 'center' });
+    let yPos = 44;
 
-    doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
-    doc.text('Work Order', PW / 2, 32, { align: 'center' });
-
-    // Website / email row  +  Date / WO number row
-    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(60);
-    doc.text('Website : www.arihantgroupjaipur.com', ML, 39);
-    doc.text('Email : info@arihantgroupjaipur.com', ML, 44);
-
-    const woDate = fmtTs(workOrder.createdAt || workOrder.date);
-
-    doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
-    doc.text('Date :', PW - MR - 55, 39);
-    doc.setFont('helvetica', 'normal');
-    doc.text(woDate, PW - MR - 55 + doc.getTextWidth('Date :  '), 39);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Work Order No :', PW - MR - 55, 44);
-    doc.setFont('helvetica', 'normal');
-    const woNumLines = doc.splitTextToSize(workOrder.workOrderNumber || '—', 45);
-    doc.text(woNumLines, PW - MR - 55 + doc.getTextWidth('Work Order No :  '), 44);
-
-    // Divider
-    doc.setDrawColor(160); doc.setLineWidth(0.4);
-    doc.line(ML, 48, PW - MR, 48);
-    doc.setTextColor(0);
-
-    let yPos = 53;
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Helpers ──────────────────────────────────────────────────────────────
     const printContHeader = () => {
         doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(120);
-        doc.text(`Work Order No:  ${workOrder.workOrderNumber || '—'}  (continued)`, ML, 14);
+        doc.text(`Work Order No: ${workOrder.workOrderNumber || '—'}  (continued)`, ML, 14);
         doc.setDrawColor(180); doc.setLineWidth(0.3);
         doc.line(ML, 17, PW - MR, 17);
         doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
     };
 
     const checkBreak = (needed = 10) => {
-        if (yPos + needed > SAFE_BOTTOM) {
+        if (yPos + needed > FOOTER_Y - 6) {
             doc.addPage();
             printContHeader();
-            yPos = CONT_TOP;
+            yPos = 22;
         }
     };
 
-    // Draw a labelled field box with dynamic height based on wrapped value
-    const LABEL_W  = 58;   // reserved width for label
-    const VAL_MAX_W = USABLE_W - LABEL_W - 4;
-
-    const drawField = (label, value) => {
-        doc.setFontSize(8.5);
-        const valLines = doc.splitTextToSize(value || '—', VAL_MAX_W);
-        const boxH = Math.max(8, valLines.length * LINE_SM + 4);
-
-        checkBreak(boxH + 1);
-
-        doc.setDrawColor(180); doc.setLineWidth(0.3);
-        doc.rect(ML, yPos, USABLE_W, boxH);
-
-        // Label (bold)
-        doc.setFont('helvetica', 'bold'); doc.setTextColor(40);
-        doc.text(label, ML + 2, yPos + LINE_SM);
-
-        // Value (normal, wrapped)
-        doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
-        valLines.forEach((line, i) =>
-            doc.text(line, ML + LABEL_W, yPos + LINE_SM + i * LINE_SM)
-        );
-
-        yPos += boxH;
+    const sectionHeading = (text) => {
+        checkBreak(8);
+        doc.setFontSize(9.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+        doc.text(text, ML, yPos);
+        yPos += 5;
     };
 
-    // ── Field rows ────────────────────────────────────────────────────────────
-    drawField('Main WO Reference',       workOrder.mainWorkOrderReference    || '');
-    drawField('Task No',                 workOrder.taskReference             || '');
-    drawField('Address / Location',      workOrder.addressLocation           || '');
-    drawField('Contact Person Name',     workOrder.contactPersonName         || '');
-    drawField('Work Location Name',      workOrder.workLocationName          || '');
-    drawField('Store Keeper / Supervisor', workOrder.storeKeeperSupervisorName || '');
-    drawField('Comments / Special Instr.', workOrder.comments               || '');
+    // Two label/value pairs per row, drawn as a bordered grid (matches the printed form's header block)
+    const twoColGrid = (rows) => {
+        const rowH = 8;
+        const colLabelW = 38;
+        const colValW = USABLE_W / 2 - colLabelW;
+        checkBreak(rows.length * rowH);
+        doc.setDrawColor(0); doc.setLineWidth(0.25);
+        rows.forEach(([l1, v1, l2, v2]) => {
+            const y = yPos;
+            doc.rect(ML, y, colLabelW, rowH);
+            doc.rect(ML + colLabelW, y, colValW, rowH);
+            doc.rect(ML + colLabelW + colValW, y, colLabelW, rowH);
+            doc.rect(ML + 2 * colLabelW + colValW, y, colValW, rowH);
 
-    yPos += 5;
+            doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+            doc.text(l1, ML + 2, y + 5.3);
+            doc.text(l2, ML + colLabelW + colValW + 2, y + 5.3);
 
-    // ── Work Items table ──────────────────────────────────────────────────────
-    checkBreak(20);
-    const tableData = (workOrder.workItems || []).map(item => [
-        item.workDescription || '',
-        item.plannedLabour   || '',
-        item.workStartDate  ? new Date(item.workStartDate).toLocaleDateString('en-IN',  { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '',
-        item.workFinishDate ? new Date(item.workFinishDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '',
-        item.workArea       || '',
-        item.rate           || '',
-        item.totalAmount    || '',
+            doc.setFont('helvetica', 'normal');
+            doc.text(doc.splitTextToSize(v1 || '', colValW - 4), ML + colLabelW + 2, y + 5.3);
+            doc.text(doc.splitTextToSize(v2 || '', colValW - 4), ML + 2 * colLabelW + colValW + 2, y + 5.3);
+
+            yPos += rowH;
+        });
+    };
+
+    // ── Header info grid ─────────────────────────────────────────────────────
+    twoColGrid([
+        ['Work Order No.', workOrder.workOrderNumber, 'Date Issued', fmtDate(workOrder.date)],
+        ['Project Name', workOrder.projectName, 'Site Location', workOrder.siteLocation],
+        ['Issued By', workOrder.issuedBy, 'Issued To', workOrder.issuedTo],
+        ['Contract', workOrder.contractType, 'Block', workOrder.block],
+        ['Start Date', fmtDate(workOrder.startDate), 'Valid Till', fmtDate(workOrder.validTill)],
     ]);
 
-    // Minimum 3 rows for form look
-    while (tableData.length < 3) tableData.push(['', '', '', '', '', '', '']);
+    yPos += 6;
+
+    // ── 1. Scope of Work ─────────────────────────────────────────────────────
+    sectionHeading('1. SCOPE OF WORK');
+
+    const scopeRows = (workOrder.workItems || []).map((item, i) => [
+        String(i + 1),
+        item.workDescription || '',
+        item.floor || '',
+        fmtDate(item.workStartDate),
+        fmtDate(item.workFinishDate),
+        fmtDate(item.revisedDate),
+    ]);
+    while (scopeRows.length < 3) scopeRows.push([String(scopeRows.length + 1), '', '', '', '', '']);
 
     autoTable(doc, {
         startY: yPos,
-        head: [[
-            'Work Description', 'No of Planned Labour',
-            'Work Start Date', 'Work Finish Date',
-            'Work Area', 'Rate', 'Total Amount',
-        ]],
-        body: tableData,
+        head: [['S.No', 'Description of Work', 'Floor', 'Start Date', 'Original End Date', 'Revised Date']],
+        body: scopeRows,
         theme: 'grid',
-        headStyles: {
-            fillColor: [255, 255, 255], textColor: [0, 0, 0],
-            fontStyle: 'bold', fontSize: 8, halign: 'center',
-            lineWidth: 0.4, lineColor: [0, 0, 0], cellPadding: 3,
-        },
-        bodyStyles: {
-            textColor: [0, 0, 0], fontSize: 8,
-            cellPadding: 3, lineWidth: 0.4, lineColor: [0, 0, 0],
-        },
+        headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8, halign: 'center', lineWidth: 0.3, lineColor: [0, 0, 0] },
+        bodyStyles: { textColor: [0, 0, 0], fontSize: 8, lineWidth: 0.3, lineColor: [0, 0, 0] },
         columnStyles: {
-            0: { cellWidth: 48 },
-            1: { cellWidth: 22, halign: 'center' },
-            2: { cellWidth: 22, halign: 'center' },
-            3: { cellWidth: 22, halign: 'center' },
-            4: { cellWidth: 20, halign: 'center' },
-            5: { cellWidth: 18, halign: 'right'  },
-            6: { cellWidth: 28, halign: 'right'  },
+            0: { cellWidth: 12, halign: 'center' },
+            1: { cellWidth: 62 },
+            2: { cellWidth: 20, halign: 'center' },
+            3: { cellWidth: 24, halign: 'center' },
+            4: { cellWidth: 28, halign: 'center' },
+            5: { cellWidth: 24, halign: 'center' },
         },
-        margin: { left: ML, right: MR, bottom: 22 },
+        margin: { left: ML, right: MR, bottom: 20 },
     });
+    yPos = doc.lastAutoTable.finalY + 6;
 
-    yPos = doc.lastAutoTable.finalY + 5;
+    // ── 2. Reference Drawings / Specifications ───────────────────────────────
+    checkBreak(14);
+    sectionHeading('2. REFERENCE DRAWINGS / SPECIFICATIONS');
 
-    // ── Hindi notes (canvas → image) ──────────────────────────────────────────
-    const HINDI_H = 20;
-    checkBreak(HINDI_H + 4);
+    const refRows = (workOrder.referenceDrawings || []).map((r, i) => [
+        String(i + 1), r.revisionDate || '', r.specification || '', r.attached || '',
+    ]);
+    while (refRows.length < 2) refRows.push([String(refRows.length + 1), '', '', '']);
 
-    try {
-        const canvas = document.createElement('canvas');
-        canvas.width  = 1200;
-        canvas.height = 130;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = '#aaa';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 20px Arial, sans-serif';
-        ctx.fillText('अतिरिक्त नोट :', 10, 28);
-        ctx.font = '17px Arial, sans-serif';
-        ctx.fillText('1. बिल जमा करते समय कार्य आदेश (Work Order) की प्रति संलग्न करना आवश्यक है।', 10, 54);
-        ctx.fillText('2. कार्य में किसी भी प्रकार की त्रुटि का दायित्व ठेकेदार का है और सुधार का कार्य करना है।', 10, 76);
-        ctx.fillText('3. कार्य का वर्क आर्डर के अनुसार गुणवत्ता मानक के अनुसार करना है।', 10, 98);
-        ctx.fillText('4. हाउसकीपिंग और सफाई का कार्य करना है।', 10, 120);
-        doc.addImage(canvas.toDataURL('image/png'), 'PNG', ML, yPos, USABLE_W, HINDI_H);
-    } catch { /* skip if canvas fails */ }
+    autoTable(doc, {
+        startY: yPos,
+        head: [['S.No', 'Revision / Date', 'Specification / Standard', 'Attached (Y/N)']],
+        body: refRows,
+        theme: 'grid',
+        headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8, halign: 'center', lineWidth: 0.3, lineColor: [0, 0, 0] },
+        bodyStyles: { textColor: [0, 0, 0], fontSize: 8, lineWidth: 0.3, lineColor: [0, 0, 0], halign: 'center' },
+        columnStyles: {
+            0: { cellWidth: 14 },
+            1: { cellWidth: 40 },
+            2: { cellWidth: 92, halign: 'left' },
+            3: { cellWidth: 24 },
+        },
+        margin: { left: ML, right: MR, bottom: 20 },
+    });
+    yPos = doc.lastAutoTable.finalY + 6;
 
-    yPos += HINDI_H + 6;
+    // ── 3. Resources to be Deployed ──────────────────────────────────────────
+    checkBreak(30);
+    sectionHeading('3. RESOURCES TO BE DEPLOYED');
 
-    // ── Signature section ─────────────────────────────────────────────────────
-    const SIG_BOX_H   = 30;
-    const SIG_LABEL_H = 8;
-    const SIG_TOTAL   = SIG_BOX_H + SIG_LABEL_H + 6;
+    const res = workOrder.resources || {};
+    twoColGrid([
+        ['Labour (Mason)', res.labourMason, 'Labour (beldar/cull)', res.labourBeldarCull],
+        ['Supervisor / Foreman', res.supervisorForeman, 'Engineer InCharge', res.engineerInCharge],
+        ['Equipment / Machinery', res.equipmentMachinery, 'Material Issued', res.materialIssued],
+    ]);
 
-    checkBreak(SIG_TOTAL);
+    yPos += 8;
 
-    const colW  = (USABLE_W - 10) / 3;
-    const col1X = ML;
-    const col2X = ML + colW + 5;
-    const col3X = ML + (colW + 5) * 2;
+    // ── Signature footer ─────────────────────────────────────────────────────
+    const SIG_ROW_H = 7;
+    const SIG_BLOCK_H = SIG_ROW_H * 3 + 8;
+    checkBreak(SIG_BLOCK_H);
 
-    const sigBoxes = [
-        { label: 'Signature Of Contractor',     sig: workOrder.signatures?.contractor, x: col1X },
-        { label: 'Signature Of Site Engineer',  sig: workOrder.signatures?.engineer,   x: col2X },
-        { label: 'Signature Of Site Supervisor', sig: workOrder.signatures?.supervisor, x: col3X },
+    const colW = USABLE_W / 3;
+    const sig = workOrder.signatures || {};
+    const blocks = [
+        { title: 'Prepared & Verified By', data: sig.preparedVerifiedBy },
+        { title: 'Accepted By', data: sig.acceptedBy },
+        { title: 'Authorized By', data: sig.authorizedBy },
     ];
 
-    doc.setDrawColor(150); doc.setLineWidth(0.4);
-    sigBoxes.forEach(({ label, sig, x }) => {
-        doc.rect(x, yPos, colW, SIG_BOX_H);
-        if (sig) {
-            try { doc.addImage(sig, 'PNG', x + 2, yPos + 2, colW - 4, SIG_BOX_H - 4); } catch { /* skip */ }
-        }
-        doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(40);
-        doc.text(label, x + colW / 2, yPos + SIG_BOX_H + 5, { align: 'center' });
-    });
-    doc.setTextColor(0);
+    doc.setDrawColor(0); doc.setLineWidth(0.25);
+    blocks.forEach((b, i) => {
+        const x = ML + i * colW;
+        doc.setFillColor(0); doc.rect(x, yPos, colW, 7, 'F');
+        doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+        doc.text(b.title, x + colW / 2, yPos + 5, { align: 'center' });
+        doc.setTextColor(0);
 
-    // ── Two-pass: "Page X of N" on every page ─────────────────────────────────
+        const rowY = yPos + 7;
+        doc.rect(x, rowY, colW, SIG_ROW_H);
+        doc.rect(x, rowY + SIG_ROW_H, colW, SIG_ROW_H);
+        doc.rect(x, rowY + SIG_ROW_H * 2, colW, SIG_ROW_H);
+
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
+        doc.text(`Name: ${b.data?.name || ''}`, x + 2, rowY + 4.8);
+        doc.text('Sign:', x + 2, rowY + SIG_ROW_H + 4.8);
+        if (b.data?.signature) {
+            try { doc.addImage(b.data.signature, 'PNG', x + 14, rowY + SIG_ROW_H + 0.8, colW - 18, SIG_ROW_H - 2); } catch { /* skip */ }
+        }
+        doc.text(`Date: ${fmtDate(b.data?.date)}`, x + 2, rowY + SIG_ROW_H * 2 + 4.8);
+    });
+
+    // ── Page numbers ─────────────────────────────────────────────────────────
     const totalPages = doc.internal.getNumberOfPages();
     for (let p = 1; p <= totalPages; p++) {
         doc.setPage(p);
         doc.setDrawColor(200); doc.setLineWidth(0.2);
         doc.line(ML, FOOTER_Y - 4, PW - MR, FOOTER_Y - 4);
         doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(150);
-        doc.text(
-            `Page ${p} of ${totalPages}  ·  Work Order ${workOrder.workOrderNumber || ''}`,
-            PW / 2, FOOTER_Y, { align: 'center' }
-        );
+        doc.text(`Page ${p} of ${totalPages}  ·  Work Order ${workOrder.workOrderNumber || ''}`, PW / 2, FOOTER_Y, { align: 'center' });
     }
 
-    // ── Download ──────────────────────────────────────────────────────────────
+    // ── Download ─────────────────────────────────────────────────────────────
     const fileName = `Work_Order_${workOrder.workOrderNumber || 'export'}_${new Date().toISOString().split('T')[0]}.pdf`;
-    const url  = URL.createObjectURL(doc.output('blob'));
-    const link = Object.assign(document.createElement('a'), {
-        href: url, download: fileName, style: 'display:none',
-    });
+    const url = URL.createObjectURL(doc.output('blob'));
+    const link = Object.assign(document.createElement('a'), { href: url, download: fileName, style: 'display:none' });
     document.body.appendChild(link);
     link.click();
     setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 100);

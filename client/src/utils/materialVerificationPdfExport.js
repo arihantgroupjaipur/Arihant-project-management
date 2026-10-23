@@ -160,7 +160,7 @@ export const generateMaterialVerificationPdf = async (pos, showLogo = true) => {
                     receipt.items?.forEach(item => {
                         receiptsRows.push([
                             item.materialDescription || 'N/A',
-                            '',
+                            item.qualityCheckRemarks || '-',
                             item.quantityReceived || 0
                         ]);
                     });
@@ -168,7 +168,7 @@ export const generateMaterialVerificationPdf = async (pos, showLogo = true) => {
 
                 autoTable(doc, {
                     startY: yPos,
-                    head: [['Description', '', 'Quantity']],
+                    head: [['Description', 'Quality Remarks', 'Quantity']],
                     body: receiptsRows,
                     theme: 'grid',
                     headStyles: {
@@ -180,7 +180,7 @@ export const generateMaterialVerificationPdf = async (pos, showLogo = true) => {
                     styles: { fontSize: 8, cellPadding: 3 },
                     columnStyles: {
                         0: { halign: 'left', cellWidth: 'auto' },
-                        1: { cellWidth: 20 },
+                        1: { halign: 'left', cellWidth: 55 },
                         2: { halign: 'right', cellWidth: 30 }
                     },
                     didDrawPage: function (data) {

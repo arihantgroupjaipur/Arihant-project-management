@@ -80,6 +80,16 @@ router.post('/', authMiddleware, async (req, res) => {
             comments,
             workItems,
             signatures,
+            projectName,
+            siteLocation,
+            issuedBy,
+            issuedTo,
+            contractType,
+            block,
+            startDate,
+            validTill,
+            referenceDrawings,
+            resources,
         } = req.body;
 
         // Check if work order number already exists
@@ -100,6 +110,16 @@ router.post('/', authMiddleware, async (req, res) => {
             comments,
             workItems,
             signatures,
+            projectName,
+            siteLocation,
+            issuedBy,
+            issuedTo,
+            contractType,
+            block,
+            startDate,
+            validTill,
+            referenceDrawings,
+            resources,
             createdBy: req.user.id,
         });
 
@@ -131,6 +151,16 @@ router.put('/:id', authMiddleware, async (req, res) => {
             workItems,
             signatures,
             uploadedPdf,
+            projectName,
+            siteLocation,
+            issuedBy,
+            issuedTo,
+            contractType,
+            block,
+            startDate,
+            validTill,
+            referenceDrawings,
+            resources,
         } = req.body;
 
         let workOrder = await WorkOrder.findById(req.params.id);
@@ -159,6 +189,16 @@ router.put('/:id', authMiddleware, async (req, res) => {
         workOrder.workItems = workItems;
         workOrder.signatures = signatures;
         if (uploadedPdf !== undefined) workOrder.uploadedPdf = uploadedPdf;
+        if (projectName !== undefined) workOrder.projectName = projectName;
+        if (siteLocation !== undefined) workOrder.siteLocation = siteLocation;
+        if (issuedBy !== undefined) workOrder.issuedBy = issuedBy;
+        if (issuedTo !== undefined) workOrder.issuedTo = issuedTo;
+        if (contractType !== undefined) workOrder.contractType = contractType;
+        if (block !== undefined) workOrder.block = block;
+        if (startDate !== undefined) workOrder.startDate = startDate;
+        if (validTill !== undefined) workOrder.validTill = validTill;
+        if (referenceDrawings !== undefined) workOrder.referenceDrawings = referenceDrawings;
+        if (resources !== undefined) workOrder.resources = resources;
 
         await workOrder.save();
         syncAllWorkOrdersToSheet().catch(err => console.error('Sheet Sync Error:', err));
